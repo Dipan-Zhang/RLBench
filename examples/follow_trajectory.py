@@ -8,7 +8,7 @@ from rlbench.environment import Environment
 from rlbench.tasks import ReachTarget
 
 
-class ImitationLearning(object):
+class Affordance_transfer(object):
     "dummy agent for imitation learning"
     def predict_action(self, batch):
         return np.random.uniform(size=(len(batch), 7))
@@ -35,7 +35,7 @@ env.launch()
 # created from available tasks
 task = env.get_task(ReachTarget)
 
-il = ImitationLearning()
+affordance_transfer = Affordance_transfer()
 
 # get 2 demos from the task, within demo, includes a list of observations + actions
 demos = task.get_demos(2, live_demos=live_demos)  # -> List[List[Observation]]
@@ -46,9 +46,9 @@ for i in range(100):
     print("'training' iteration %d" % i)
     batch = np.random.choice(demos, replace=False)
     batch_images = [obs.left_shoulder_rgb for obs in batch]
-    predicted_actions = il.predict_action(batch_images)
+    predicted_actions = affordance_transfer.predict_action(batch_images)
     ground_truth_actions = [obs.joint_velocities for obs in batch]
-    loss = il.behaviour_cloning_loss(ground_truth_actions, predicted_actions)
+    loss = affordance_transfer.behaviour_cloning_loss(ground_truth_actions, predicted_actions)
 
 print('Done')
 env.shutdown()
