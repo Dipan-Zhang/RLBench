@@ -1,0 +1,69 @@
+SAVE_RENDER: True
+INFERENCE_GSAM: True
+USE_GSNET: True
+SAVE_ROOT: "simulation/outputs/"
+DATA_SOURCE: "droid"
+
+# cam
+cameras: ["front", "left_shoulder", "right_shoulder", "wrist"]
+cam_w: 512
+cam_h: 512
+
+
+gsnet:
+  save_files: False
+  dataset_root: ""
+  checkpoint_path: ../RAM_code/assets/ckpts/minkuresunet_kinect.tar
+  dump_dir: ./logs/
+  seed_feat_dim: 512
+  camera: kinect
+  num_point: 15000
+  batch_size: 1
+  voxel_size: 0.005
+  collision_thresh: 0.0000
+  voxel_size_cd: 0.01
+  infer: True
+  vis: False
+
+REAL_EXP_TASK_LIST:
+  [
+    'take_bowl', 
+    'take_cup',
+    'pick_up_bottle',
+    'wipe_desk', # ??
+  ]
+
+PORTABLE_TASK_LIST:
+  [
+    'pick_up_cup', # done 
+    'pick_up_bottle', # done
+    'pick_up_mug', # done
+    'take_lid_off_saucepan', # no demo yet
+    'pick_up_bowl', # depth issue
+    'open_jar', # no demo
+    'water_plants', # no demo
+  ]
+# each object state has to be different demo??? open and closed microwave for example, just stick with this for now 
+# how RAM solve this??? also 
+
+# must have: open close cabinet, drawer, microwave| open fridge, oven, washing machine 
+ARTICULATE_TASK_LIST:
+  [
+    'open_drawer', # done, low SR, draw1 low quality, try drawer2
+    'open_microwave', # ready for demo
+    'toilet_seat_down', # ready for demo gen
+
+    'open_cabinet', #! cupboard3 ready for demo gen ?? no such tasks?
+    'slide_cabinet_open',  # needs a kinect demo
+    'open_door',  # flow low quality, needs a kinect demo
+    'open_washing_machine', # no deom
+    'open_fridge', # demo done, exp not
+    'open_oven', # no demo
+
+    'slide_cabinet_close',
+    'close_drawer', 
+    'close_door', 
+    'close_microwave', 
+    'toilet_seat_up', # create special case for this
+  ]
+  
