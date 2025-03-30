@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import argparse
 import json
 
-# from affordance.helpers import backproject, visualize_points
 """
 TO BE DEPRECATED => use interative mask instead
 Only use it for image that you want to reconstruct with NEUS, because it will resize the image

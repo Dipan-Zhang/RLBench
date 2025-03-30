@@ -40,7 +40,7 @@ PORTABLE_TASK_LIST:
     'pick_up_mug', # done
     'take_lid_off_saucepan', # no demo yet
     'pick_up_bowl', # depth issue
-    'open_jar', # no demo
+    # 'open_jar', # no demo
     'water_plants', # no demo
   ]
 # each object state has to be different demo??? open and closed microwave for example, just stick with this for now 
@@ -50,20 +50,21 @@ PORTABLE_TASK_LIST:
 ARTICULATE_TASK_LIST:
   [
     'open_drawer', # done, low SR, draw1 low quality, try drawer2
+    'close_drawer', 
     'open_microwave', # ready for demo
+    'close_microwave', 
     'toilet_seat_down', # ready for demo gen
+    'toilet_seat_up', # create special case for this
 
-    'open_cabinet', #! cupboard3 ready for demo gen ?? no such tasks?
     'slide_cabinet_open',  # needs a kinect demo
+    'slide_cabinet_close',
+    'open_cabinet', #! cupboard3 ready for demo gen ?? no such tasks?
     'open_door',  # flow low quality, needs a kinect demo
     'open_washing_machine', # no deom
     'open_fridge', # demo done, exp not
     'open_oven', # no demo
 
-    'slide_cabinet_close',
-    'close_drawer', 
     'close_door', 
-    'close_microwave', 
-    'toilet_seat_up', # create special case for this
   ]
+  
   

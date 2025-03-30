@@ -23,6 +23,14 @@ import pickle
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def underscore_string_to_camel_case(string):
+    """
+    Convert a string from underscore format to camel case format.
+    For example, 'my_variable_name' becomes 'MyVariableName'.
+    """
+    components = string.split('_')
+    return ''.join(x.title() for x in components) 
+
 def visualize_points(points, colors=None):
     try:
         pcd = o3d.geometry.PointCloud()
@@ -162,9 +170,9 @@ def preprocess_target_data(tgt_rgb, tgt_depth, cam_K, dataset, obj_name:str):
     
     
         tgt_mask = (tgt_masks[0][0] > 0).astype(np.uint8)
-        center, crop_scale, resize_ratio = compute_cropping_params(tgt_mask, pad_ratio=1.25, resolution=256)
-        cam_K_resized = compute_cropped_intrinsics(cam_K, resize_ratio, center, 256)
-        tgt_rgb_cropped, tgt_mask_cropped, tgt_depth_cropped = crop_images(tgt_rgb, tgt_mask, tgt_depth, center, crop_scale, 256)
+        center, crop_scale, resize_ratio = compute_cropping_params(tgt_mask, pad_ratio=1.25, resolution=512)
+        cam_K_resized = compute_cropped_intrinsics(cam_K, resize_ratio, center, 512)
+        tgt_rgb_cropped, tgt_mask_cropped, tgt_depth_cropped = crop_images(tgt_rgb, tgt_mask, tgt_depth, center, crop_scale, 512)
         color_cropped_rgba = np.concatenate([tgt_rgb_cropped, tgt_mask_cropped], axis=-1)
         # TODO: put this in proper location
         cropped_rgb_fname = './outputs/rlbench/cropped_color.png'

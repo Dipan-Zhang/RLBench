@@ -11,7 +11,7 @@ import shutil
 import numpy as np
 
 import open3d as o3d
-from affordance.helpers import visualize_3d_trajectory
+from benchmark.helpers import visualize_3d_trajectory
 import ipdb
 
 
@@ -44,40 +44,16 @@ CAMERA_POSES = {
     "PickUpCup":{'camera_name': 'cam_front'},
     "PickUpMug":{'camera_name': 'cam_front'},
     "PickUpBowl":{'camera_name': 'cam_front'},
-    "SlideCabinetOpen":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-0.8, 0.0, 1.2],
-        'ori': [180, 75, -90]
-    },
-    "OpenDrawerFixed":{
+
+    "OpenDrawer":{
         'camera_name': 'cam_over_shoulder_left',
         'pos': [0.5, 1.6, 1.4],
         'ori': [110, 0, 0]
     },
-    "ToiletSeatDown":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-0.2, 1.6, 1.2],
-        'ori': [105, 100, 0],
-    },
-    "ToiletSeatUp":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-0.2, 1.6, 1.2],
-        'ori': [105, 100, 0],
-    },
-    "CloseDrawerFixed":{
+    "CloseDrawer":{
         'camera_name': 'cam_over_shoulder_left',
         'pos': [0.2, 1.6, 1.2],
         'ori': [100, 0, 0]
-    },
-    "OpenDoor":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-1.0, 0.0, 1.2],
-        'ori': [180, 75, -90]
-    },
-    "CloseDoor":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-1.0, 0.0, 1.2],
-        'ori': [180, 75, -90]
     },
     "OpenMicrowave":{
         'camera_name': 'cam_over_shoulder_right',
@@ -89,10 +65,41 @@ CAMERA_POSES = {
         'pos': [0.2, -1.5, 1.2],
         'ori': [-100, 0, 180]
     },
-    "OpenWashingMachin":{},
-    "OpenOven":{},
-    "CloseLaptopLid":{},
-    "OpenCabinet": {}, 
+
+    "ToiletSeatDown":{
+        'camera_name': 'cam_over_shoulder_left',
+        'pos': [-0.3, 1.6, 1.2],
+        'ori': [105, 15, 0],
+    },
+
+    "SlideCabinetOpen":{
+        'camera_name': 'cam_over_shoulder_left',
+        'pos': [-0.8, 0.0, 1.2],
+        'ori': [180, 75, -90]
+    },
+    
+    # still missing: open/ close cabinet
+    # needs to tune pos
+    # "ToiletSeatUp":{
+    #     'camera_name': 'cam_over_shoulder_left',
+    #     'pos': [-0.3, 1.6, 1.2],
+    #     'ori': [105, 15, 0],
+    # },
+
+    # "OpenWashingMachin":{},
+    # "OpenOven":{},
+    # "CloseLaptopLid":{},
+    # "OpenCabinet": {}, 
+    # "OpenDoor":{
+    #     'camera_name': 'cam_over_shoulder_left',
+    #     'pos': [-1.0, 0.0, 1.2],
+    #     'ori': [180, 75, -90]
+    # },
+    # "CloseDoor":{
+    #     'camera_name': 'cam_over_shoulder_left',
+    #     'pos': [-1.0, 0.0, 1.2],
+    #     'ori': [180, 75, -90]
+    # },
 
 }
 def task_file_to_task_class(task_file):
