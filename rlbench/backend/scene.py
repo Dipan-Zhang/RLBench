@@ -365,8 +365,8 @@ class Scene(object):
                     raise DemoError(
                         'Could not get a path for waypoint %d.' % i,
                         self.task) from e
-                ext = point.get_ext()
-                path.visualize()
+                ext = point.get_ext() # get extension string
+                path.visualize() # visualize the path
 
                 done = False
                 success = False
@@ -453,6 +453,117 @@ class Scene(object):
         processed_demo = Demo(demo)
         processed_demo.num_reset_attempts = self._attempts + 1
         return processed_demo
+
+
+    def move_to_grasp(self, record: bool = True,
+                 callable_each_step: Callable[[Observation], None] = None,
+                 randomly_place: bool = True) -> Demo:
+        """Returns a demo (list of observations)"""
+
+        if not self._has_init_task:
+            self.init_task()
+        if not self._has_init_episode:
+            self.init_episode(self._variation_index,
+                              randomly_place=randomly_place)
+        self._has_init_episode = False
+
+        waypoints = self.task.get_waypoints()
+        if len(waypoints) == 0:
+            raise NoWaypointsError(
+                'No waypoints were found.', self.task)
+
+        # execute the waypoints and records the demos (observations+actions)
+        if record:
+            self.pyrep.step()  # Need this here or get_force doesn't work...
+            self._joint_position_action = None
+            gripper_open = 1.0 if self.robot.gripper.get_open_amount()[0] > 0.9 else 0.0
+        else:
+            gripper_open = 0.0 # hotfix
+        while True:
+            success = False
+            for i, point in enumerate(waypoints):
+                point.start_of_path()
+                if point.skip:
+                    continue
+                grasped_objects = self.robot.gripper.get_grasped_objects()
+                colliding_shapes = [s for s in self.pyrep.get_objects_in_tree(
+                    object_type=ObjectType.SHAPE) if s not in grasped_objects
+                                    and s not in self._robot_shapes and s.is_collidable()
+                                    and self.robot.arm.check_arm_collision(s)]
+                [s.set_collidable(False) for s in colliding_shapes]
+                try:
+                    path = point.get_path()
+                    [s.set_collidable(True) for s in colliding_shapes]
+                except ConfigurationPathError as e:
+                    [s.set_collidable(True) for s in colliding_shapes]
+                    raise DemoError(
+                        'Could not get a path for waypoint %d.' % i,
+                        self.task) from e
+                ext = point.get_ext() # get extension string
+                path.visualize() # visualize the path
+
+                done = False
+                success = False
+                while not done:
+                    done = path.step()
+                    self.step()
+                    self._joint_position_action = np.append(path.get_executed_joint_position_action(), gripper_open)
+                    success, term = self.task.success()
+
+                point.end_of_path()
+
+                path.clear_visualization()
+
+                if len(ext) > 0:
+                    contains_param = False
+                    start_of_bracket = -1
+                    gripper = self.robot.gripper
+                    if 'open_gripper(' in ext:
+                        gripper.release()
+                        start_of_bracket = ext.index('open_gripper(') + 13
+                        contains_param = ext[start_of_bracket] != ')'
+                        if not contains_param:
+                            done = False
+                            while not done:
+                                gripper_open = 1.0
+                                done = gripper.actuate(gripper_open, 0.04)
+                                self.step()
+                                self._joint_position_action = np.append(path.get_executed_joint_position_action(), gripper_open)
+                    elif 'close_gripper(' in ext:
+                        start_of_bracket = ext.index('close_gripper(') + 14
+                        contains_param = ext[start_of_bracket] != ')'
+                        if not contains_param:
+                            done = False
+                            while not done:
+                                gripper_open = 0.0
+                                done = gripper.actuate(gripper_open, 0.04)
+                                self.step()
+                                self._joint_position_action = np.append(path.get_executed_joint_position_action(), gripper_open)
+                                    
+                            success = True # break after closing gripper
+                            break
+                            
+
+                    if contains_param:
+                        rest = ext[start_of_bracket:]
+                        num = float(rest[:rest.index(')')])
+                        done = False
+                        while not done:
+                            gripper_open = num
+                            done = gripper.actuate(gripper_open, 0.04)
+                            self.step()
+                            self._joint_position_action = np.append(path.get_executed_joint_position_action(), gripper_open)
+
+                    if 'close_gripper(' in ext:
+                        for g_obj in self.task.get_graspable_objects():
+                            gripper.grasp(g_obj)
+                        success = True  # break after closing gripper
+                        break
+
+            if not self.task.should_repeat_waypoints() or success:
+                break
+
+        return 1
 
     def get_observation_config(self) -> ObservationConfig:
         return self._obs_config

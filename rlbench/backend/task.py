@@ -7,7 +7,7 @@ import numpy as np
 from pyrep import PyRep
 from pyrep.const import ObjectType
 from pyrep.errors import ConfigurationPathError
-from pyrep.objects.cartesian_path import CartesianPath
+from pyrep.objects.cartesian_path import CartesianPath #! understand this
 from pyrep.objects.dummy import Dummy
 from pyrep.objects.force_sensor import ForceSensor
 from pyrep.objects.joint import Joint
@@ -40,7 +40,7 @@ class Task(object):
         self._graspable_objects = []
         self._base_object = None
         self._waypoint_additional_inits = {}
-        self._waypoint_abilities_start = {}
+        self._waypoint_abilities_start = {} # here load some waypoints ( static I think? )
         self._waypoint_abilities_end = {}
         self._waypoints_should_repeat = lambda: False
         self._initial_objs_in_scene = None
@@ -399,7 +399,7 @@ class Task(object):
                     '%s is an unsupported waypoint type %s' % (
                         name, ob_type), self)
 
-            if name in self._waypoint_additional_inits and not validating:
+            if name in self._waypoint_additional_inits and not validating: # here can add more some points???
                 additional_waypoint_inits.append(
                     (self._waypoint_additional_inits[name], way))
             waypoints.append(way)

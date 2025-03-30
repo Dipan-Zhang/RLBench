@@ -144,7 +144,7 @@ class TaskEnvironment(object):
                         max_attempts: int = _MAX_DEMO_ATTEMPTS) -> List[Demo]:
         demos = []
         for i in range(amount):
-            attempts = max_attempts
+            attempts = max_attempts # totoal amount of attempts to get all demos
             while attempts > 0:
                 random_seed = np.random.get_state()
                 self.reset()
@@ -162,6 +162,13 @@ class TaskEnvironment(object):
                     'Could not collect demos. Maybe a problem with the task?')
         return demos
 
+    def move_to_grasp(self) -> None:
+        ctr_loop = self._robot.arm.joints[0].is_control_loop_enabled()
+        self._robot.arm.set_control_loop_enabled(True)
+        self._scene.move_to_grasp()
+        self._robot.arm.set_control_loop_enabled(ctr_loop)
+        return True
+    
     def reset_to_demo(self, demo: Demo) -> (List[str], Observation):
         demo.restore_state()
         variation_index = demo._observations[0].misc["variation_index"]
