@@ -48,3 +48,5 @@ class SlideCabinetOpen(Task):
 
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
         return [0.0, 0.0, -3.14 / 4.], [0.0, 0.0, 3.14 / 4.]
+    def is_static_workspace(self) -> bool:
+        return True

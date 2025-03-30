@@ -43,6 +43,7 @@ class PickUpKnife(Task):
         return len(colors)
     
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
-        return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
+        # return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
+        return [0, 0, 0], [0, 0, 0]
     
 

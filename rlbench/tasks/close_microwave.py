@@ -27,3 +27,6 @@ class CloseMicrowave(Task):
 
     def boundary_root(self) -> Object:
         return Shape('boundary_root')
+
+    def is_static_workspace(self) -> bool:
+        return True

@@ -6,7 +6,7 @@ from rlbench.backend.conditions import JointCondition
 from rlbench.backend.task import Task
 
 
-class OpenDrawer(Task):
+class OpenDrawerFixed(Task):
 
     def init_task(self) -> None:
         self._options = ['bottom', 'middle', 'top']
@@ -31,6 +31,3 @@ class OpenDrawer(Task):
 
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
         return [0, 0, 0], [0, 0, 0]
-
-    def is_static_workspace(self) -> bool:
-        return True

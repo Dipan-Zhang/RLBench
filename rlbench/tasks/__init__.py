@@ -43,6 +43,10 @@ from rlbench.tasks.phone_on_base import PhoneOnBase
 from rlbench.tasks.pick_and_lift import PickAndLift
 from rlbench.tasks.pick_and_lift_small import PickAndLiftSmall
 from rlbench.tasks.pick_up_cup import PickUpCup
+from rlbench.tasks.pick_up_bottle import PickUpBottle
+from rlbench.tasks.pick_up_bowl import PickUpBowl
+from rlbench.tasks.pick_up_knife import PickUpKnife
+from rlbench.tasks.pick_up_mug import PickUpMug
 from rlbench.tasks.place_cups import PlaceCups
 from rlbench.tasks.place_hanger_on_rack import PlaceHangerOnRack
 from rlbench.tasks.place_shape_in_shape_sorter import PlaceShapeInShapeSorter

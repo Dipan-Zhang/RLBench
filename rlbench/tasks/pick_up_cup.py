@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import numpy as np
 from pyrep.objects.shape import Shape
 from pyrep.objects.proximity_sensor import ProximitySensor
@@ -45,3 +45,9 @@ class PickUpCup(Task):
 
     def variation_count(self) -> int:
         return len(colors)
+
+    def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
+        return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
+    
+    def is_static_workspace(self) -> bool:
+        return True
