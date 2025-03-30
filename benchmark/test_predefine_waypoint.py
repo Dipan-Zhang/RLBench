@@ -12,13 +12,11 @@ from rlbench.observation_config import ObservationConfig, CameraConfig
 from rlbench.environment import Environment
 from rlbench.tasks import PickUpCup
 
-from affordance.affordance_transfer import AffordanceTransfer
-from affordance.helpers import hash_filename, read_image, visualize_points,\
- resize_img, load_optimization_result, get_configs, interpolate_trajectory,\
- visualize_3d_trajectory, pick_points_in_viewer, draw_line, backproject_with_color,\
- preprocess_target_data
+# from affordance.affordance_transfer import AffordanceTransfer
+from benchmark.helpers import visualize_points,\
+    visualize_3d_trajectory, backproject_with_color,\
+        preprocess_target_data
 from benchmark.sim_utils import visualize_affordance_with_scene, visualize_affordance_in_pointcloud
-from NeuS.models.utils import backproject
 from pyrep.backend import sim
 # from transforms3d.quaternions import mat2quat, quat2mat # don't fuck using this
 from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper

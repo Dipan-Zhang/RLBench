@@ -13,22 +13,18 @@ from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, En
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 
-from affordance.helpers import (
+from benchmark.helpers import (
                         visualize_points,
                         visualize_3d_trajectory,
-                        pick_points_in_viewer,
-                        draw_line, 
-                        backproject_with_color,
                         preprocess_target_data,
                         )
 # from dataset_utils.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
 
-from NeuS.models.utils import backproject
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 from scipy.spatial.transform import Rotation as Rot
 from scipy.spatial.transform import Slerp
 
-from simulation.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
+from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
           adjust_camera_pose, set_camera_pose, CAMERA_POSES
