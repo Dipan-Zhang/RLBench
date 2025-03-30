@@ -20,6 +20,7 @@ class ReachTarget(Task):
             [DetectedCondition(self.robot.arm.get_tip(), success_sensor)])
 
     def init_episode(self, index: int) -> List[str]:
+        # change color randomly
         color_name, color_rgb = colors[index]
         self.target.set_color(color_rgb)
         color_choices = np.random.choice(
@@ -28,6 +29,7 @@ class ReachTarget(Task):
         for ob, i in zip([self.distractor0, self.distractor1], color_choices):
             name, rgb = colors[i]
             ob.set_color(rgb)
+        # sample the position of within the boundary
         b = SpawnBoundary([self.boundaries])
         for ob in [self.target, self.distractor0, self.distractor1]:
             b.sample(ob, min_distance=0.2,

@@ -27,13 +27,13 @@ class EmptyContainer(Task):
         self.success_detector1 = ProximitySensor('success1')
         self.target_waypoint = Dummy('waypoint3')
         self.spawn_boundary = SpawnBoundary([Shape('spawn_boundary')])
-        self.register_waypoint_ability_start(1, self._move_above_object)
-        self.register_waypoints_should_repeat(self._repeat)
+        self.register_waypoint_ability_start(1, self._move_above_object) # do this before move to waypoint 1
+        self.register_waypoints_should_repeat(self._repeat) # always repeat until no object left
         self.bin_objects = []
 
     def init_episode(self, index: int) -> List[str]:
         self._variation_index = index
-        self.bin_objects = sample_procedural_objects(self.get_base(), 3)
+        self.bin_objects = sample_procedural_objects(self.get_base(), 3) # sample objects and set parameters
         self.bin_objects_not_done = list(self.bin_objects)
         self.register_graspable_objects(self.bin_objects)
         self.spawn_boundary.clear()
@@ -81,7 +81,7 @@ class EmptyContainer(Task):
     def variation_count(self) -> int:
         return len(colors)
 
-    def cleanup(self) -> None:
+    def cleanup(self) -> None: # remove all the dynamic objects
         [ob.remove() for ob in self.bin_objects if ob.still_exists()]
         self.bin_objects = []
 
@@ -94,14 +94,14 @@ class EmptyContainer(Task):
                 if self.success_detector1.is_detected(ob):
                     self.bin_objects_not_done.remove(ob)
 
-    def _move_above_object(self, waypoint):
+    def _move_above_object(self, waypoint): # set waypoint to object position center
         if len(self.bin_objects_not_done) <= 0:
             raise RuntimeError('Should not be here.')
         bin_obj = self.bin_objects_not_done[0]
         way_obj = waypoint.get_waypoint_object()
         way_obj.set_position(bin_obj.get_position())
-        x, y, _ = way_obj.get_orientation()
-        _, _, z = bin_obj.get_orientation(relative_to=way_obj)
+        x, y, _ = way_obj.get_orientation() # keep orientation
+        _, _, z = bin_obj.get_orientation(relative_to=way_obj) 
         way_obj.set_orientation([x, y, z])
 
     def _repeat(self):

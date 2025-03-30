@@ -30,6 +30,7 @@ from rlbench.tasks.move_hanger import MoveHanger
 from rlbench.tasks.open_box import OpenBox
 from rlbench.tasks.open_door import OpenDoor
 from rlbench.tasks.open_drawer import OpenDrawer
+# from rlbench.tasks.open_drawer_fixed import OpenDrawerFixed
 from rlbench.tasks.open_fridge import OpenFridge
 from rlbench.tasks.open_grill import OpenGrill
 from rlbench.tasks.open_jar import OpenJar
