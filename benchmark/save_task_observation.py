@@ -57,6 +57,8 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='',sav
 
     task_data = preprocess_target_data(rgb, depth, cam_K, 'kinect', obj_name=object_name)
     task_data['pointcloud'] = pointcloud_reshaped
+    task_data['T_world_cam'] = T_world_cam
+    
     task_data_save_fn = os.path.join(save_base_dir, 'task_data.npz')
     np.savez(task_data_save_fn, **task_data)
     print(f'saved observation to {save_base_dir}')

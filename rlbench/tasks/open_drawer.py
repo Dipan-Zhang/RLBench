@@ -9,6 +9,8 @@ from rlbench.backend.task import Task
 class OpenDrawer(Task):
 
     def init_task(self) -> None:
+        self.drawer = Dummy('open_drawer')
+        self.drawer.set_position([0.25, -0.2, 0.752])
         self._options = ['bottom', 'middle', 'top']
         self._anchors = [Dummy('waypoint_anchor_%s' % opt)
                          for opt in self._options]
@@ -20,7 +22,7 @@ class OpenDrawer(Task):
         option = self._options[index] # possible grasping options
         self._waypoint1.set_position(self._anchors[index].get_position())
         self.register_success_conditions(
-            [JointCondition(self._joints[index], 0.15)])
+            [JointCondition(self._joints[index], 0.1)])
         return ['open %s drawer' % option,
                 'grip the %s handle and pull the %s drawer open' % (
                     option, option),
