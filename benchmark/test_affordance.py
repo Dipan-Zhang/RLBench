@@ -35,7 +35,10 @@ from typing import List, Tuple
 import gc
 import pickle
 
-
+def get_date():
+    """Get the current date as a string."""
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d")
 def transform_trajectory(affordance_cam, T_world_cam):
     affordance_trajectory = affordance_cam @ T_world_cam[:3, :3].T + T_world_cam[:3, 3]
     # print(f'transformed affordance trajectory: {affordance_trajectory}')
@@ -54,7 +57,7 @@ def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
     # Generate a post-grasp trajectory
     post_grasp_trajectory = []
     for i in range(10):
-        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.05)
+        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.04)
         print(t)
         post_grasp_trajectory.append(t)
     return np.array(post_grasp_trajectory)
@@ -454,9 +457,13 @@ def main(args, sim_cfg):
     exp_results = []
     for i in range(num_trial):
         print(f'Episode {i}')
+        if args.save_video:
+            image_save_dir = "./outputs/{}/{}/exp_results/{}/video_{}/trial_{}".format(
+                task_name, args.method, get_date(), args.video_camera, i
+            )
+            os.makedirs(image_save_dir, exist_ok=True)
+            frame_idx = 0  # to number frames
 
-        # transfer it into world frame
-        # T_world_cam = task_data['T_world_cam']
         if method == 'ours':
             pass
         elif method == 'RAM':
@@ -488,44 +495,50 @@ def main(args, sim_cfg):
             action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
             obs, reward, terminate = task.step(action)
             trajectory_idx+=1
+
+            if args.save_video:
+                frame = getattr(obs, f'{args.video_camera}_rgb')
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                frame_path = os.path.join(image_save_dir, f"{frame_idx:06d}.png")
+                cv2.imwrite(frame_path, frame_bgr)
+                frame_idx += 1
                      
             if terminate:
                 if not reward:
                     print('All fails condition are met, task terminated')
-                    exp_results.append(-1)
                 else:
                     print('Task Success!')
-                    exp_results.append(1)
                 break
+        
+        result = -1  # Default to failure
+        if terminate:
+            if reward:
+                result = 1
+        else:
+            print('Task Timeout!')
+            result = 0
+        exp_results.append(result)
 
+        # compose video
+        if args.save_video:
+            cmd = "ffmpeg -framerate 30 -start_number 0 -i {}/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/output.mp4".format(
+                image_save_dir, image_save_dir
+            )
+            os.system(cmd)
 
-    # record the feedback/ video
-    task_env = 'rlbench'
-    task_name = args.task_name
-
-    # # read yarr for this part
-    # if args.save:
-    #     trial = 0
-    #     save_results_dir = "./NeuS/exp/sim_results/{}/{}/{}/{}/{}".format(
-    #         trial, task_env, task_name, camera_name, args.method
-    #     )
-    #     os.makedirs(save_results_dir, exist_ok=True)
-    #     save_results_path = "{}/{}.csv".format(save_results_dir, args.method)
-    #     to_write = {
-    #         "ID": np.arange(len(exp_results)),
-    #         "scores": exp_results,
-    #     }
-    #     df = pd.DataFrame(to_write)
-    #     df = df.to_csv(save_results_path, mode="w", index=None)
-
-    # if args.save_video:
-    #     image_save_dir = "./NeuS/exp/sim_results/{}/{}/{}/{}/{}".format(
-    #         trial, task_env, task_name, args.video_camera, args.method
-    #     )
-    #     cmd = "ffmpeg -framerate 30 -start_number 10 -i {}/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/output.mp4".format(
-    #         image_save_dir, image_save_dir
-    #     )
-    #     os.system(cmd)
+    # save the results
+    if args.save:
+        save_results_dir = "./outputs/{}/{}/exp_results/{}/".format(
+            task_name, args.method, get_date()
+        )
+        os.makedirs(save_results_dir, exist_ok=True)
+        save_results_path = os.path.join(save_results_dir, 'result.csv')
+        to_write = {
+            "ID": np.arange(len(exp_results)),
+            "scores": exp_results,
+        }
+        df = pd.DataFrame(to_write)
+        df = df.to_csv(save_results_path, mode="w", index=None)
 
     print('Done')
     env.shutdown()
@@ -558,3 +571,9 @@ if __name__ == '__main__':
 # Articulate
 # python benchmark/test_affordance.py --task_name OpenDrawer --method ours  --debug True
 # python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --debug True
+
+
+
+# RAM 
+# python benchmark/test_affordance.py --task_name OpenDrawer --method RAM --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name OpenMicrowave --method RAM --save_video True --video_camera left_shoulder
