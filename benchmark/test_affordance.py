@@ -50,17 +50,27 @@ def transform_motion_plan(motion_plan, T_world_cam):
         motion_plan_world.append((R, t, success))
     return motion_plan_world
 
+def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
+    # Generate a post-grasp trajectory
+    post_grasp_trajectory = []
+    for i in range(10):
+        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.05)
+        print(t)
+        post_grasp_trajectory.append(t)
+    return np.array(post_grasp_trajectory)
+
 def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
     "plan smooth gripper trajectory based on affordance trajectory"
     current_gripper_pose =obs.gripper_pose[:7]
     offset = affordance_traj_world[0] - current_gripper_pose[:3]
     affordance_traj_world -= offset
-    affordance_traj_world_downsampled = affordance_traj_world[::10]
-    affordance_traj_world_downsampled = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world_downsampled], axis=0)
+    affordance_traj_world = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world], axis=0)
     post_gripper_ori = current_gripper_pose[3:7]
 
-    post_gripper_poses = np.concatenate((affordance_traj_world_downsampled, np.repeat(post_gripper_ori.reshape(-1, 4), affordance_traj_world_downsampled.shape[0], axis=0)), axis=1)
-    post_gripper_poses = np.concatenate([post_gripper_poses, np.zeros((affordance_traj_world_downsampled.shape[0], 1))], axis=1)
+    post_gripper_poses = np.concatenate((
+        affordance_traj_world, 
+        np.repeat(post_gripper_ori.reshape(-1, 4), affordance_traj_world.shape[0], axis=0)), axis=1)
+    post_gripper_poses = np.concatenate([post_gripper_poses, np.zeros((affordance_traj_world.shape[0], 1))], axis=1)
     
     # add noise to avoid devide by zero
     noise = np.random.normal(0, 0.005, post_gripper_poses.shape)
@@ -460,14 +470,7 @@ def main(args, sim_cfg):
 
             post_grasp_dir = traj_data[str(i)]['post_grasp_dir']
             post_grasp_dir = np.array(post_grasp_dir)
-            def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
-                # Generate a post-grasp trajectory
-                post_grasp_trajectory = []
-                for i in range(10):
-                    t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.05)
-                    print(t)
-                    post_grasp_trajectory.append(t)
-                return np.array(post_grasp_trajectory)
+
             post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
 
         # smoothen the trajectory
@@ -477,7 +480,6 @@ def main(args, sim_cfg):
         task.move_to_grasp()
         obs = task.get_observation()
         actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=True)
-        ipdb.set_trace()
             
         # execute the trajectory
         episode_length = 40
@@ -486,10 +488,7 @@ def main(args, sim_cfg):
             action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
             obs, reward, terminate = task.step(action)
             trajectory_idx+=1
-            
-            print(trajectory_idx)
-            print(terminate)
-            print(reward)            
+                     
             if terminate:
                 if not reward:
                     print('All fails condition are met, task terminated')
