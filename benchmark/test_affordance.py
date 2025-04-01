@@ -93,6 +93,13 @@ def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
         o3d.visualization.draw_geometries(action_vis + plan_trajectory + [current_pcd ,world])
     return actions
 
+def save_frame(frame_idx, camera, obs, image_save_dir):
+    # Save the RGB frame
+    frame = getattr(obs, f'{camera}_rgb')
+    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    frame_path = os.path.join(image_save_dir, f"{frame_idx:06d}.png")
+    cv2.imwrite(frame_path, frame_bgr)
+
 def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
     """Execute sparse actions with fallback for motion planning failures"""
     # Handle end of trajectory or empty trajectory
@@ -128,6 +135,106 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
         if np.linalg.norm(direction) > 0:
             fallback_action[:3] += direction * 0.01 / np.linalg.norm(direction)
         return fallback_action
+
+def plan_motion_plan(obs, motion_plan_world, vis=False):
+    """Plan smooth gripper trajectory based on motion plan"""
+    current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
+    
+    post_gripper_poses = []
+    current_gripper_rotation = Rot.from_quat(current_gripper_pose[3:7])
+    current_gripper_translation = current_gripper_pose[:3]
+    post_gripper_poses.append(current_gripper_pose[:7])
+    for (R, t, success) in motion_plan_world:
+        if success:
+            motion_rotation = Rot.from_matrix(R)
+            new_gripper_rotation = current_gripper_rotation * motion_rotation
+            new_pos = (np.matmul(R, current_gripper_translation[:, np.newaxis]) + t[:, np.newaxis]).squeeze()
+
+            post_gripper_poses.append(np.concatenate([new_pos, new_gripper_rotation.as_quat()]))
+            current_gripper_translation = new_pos
+            current_gripper_rotation = new_gripper_rotation
+        else:
+            print('Failed to find a valid grasp pose, skipping this pose')
+            continue
+        
+    # Process the motion plan with smooth interpolation
+    interpolated_poses = []
+            
+    # If we already have poses, make sure they're properly smoothed
+    if len(post_gripper_poses) > 1:
+        # Add the first pose
+        interpolated_poses.append(post_gripper_poses[0])
+        
+        # For each consecutive pair of poses
+        for i in range(len(post_gripper_poses) - 1):
+            current_pose = post_gripper_poses[i]
+            next_pose = post_gripper_poses[i+1]
+            
+            # Calculate distance between poses
+            translation_diff = next_pose[:3] - current_pose[:3]
+            translation_norm = np.linalg.norm(translation_diff)
+            
+            max_step_distance = 0.03
+            
+            if translation_norm > max_step_distance:
+                steps = int(np.ceil(translation_norm / max_step_distance))
+                
+                # Create rotation keypoints for Slerp
+                current_rot = Rot.from_quat(current_pose[3:7])
+                next_rot = Rot.from_quat(next_pose[3:7])
+                
+                key_rots = Rot.from_quat([current_rot.as_quat(), next_rot.as_quat()])
+                key_times = [0, 1]
+                
+                # Create the Slerp object for rotation interpolation
+                slerp = Slerp(key_times, key_rots)
+                
+                for step in range(1, steps):
+                    step_fraction = step / steps
+                    step_pos = current_pose[:3] + translation_diff * step_fraction
+                    step_rot = slerp([step_fraction])[0]
+                    step_quat = step_rot.as_quat()
+                    interpolated_poses.append(np.concatenate([step_pos, step_quat]))
+                
+                # Add the final pose in this segment
+                interpolated_poses.append(next_pose)
+            else:
+                # Small enough translation, add directly
+                interpolated_poses.append(next_pose)
+        
+        # Replace with interpolated poses
+        post_gripper_poses = interpolated_poses
+        print(f"Smoothed trajectory from {len(motion_plan_world)} steps to {len(post_gripper_poses)} steps")
+    
+    if len(post_gripper_poses) == 0:
+        print("WARNING: No valid poses generated from motion plan!")
+        return
+    # Stack poses and add gripper state (open)
+    post_gripper_poses = np.stack(post_gripper_poses)
+    # Add gripper state (ones for open)
+    post_gripper_poses = np.concatenate(
+        [post_gripper_poses, np.zeros((post_gripper_poses.shape[0], 1))], 
+        axis=1)
+    
+    actions = post_gripper_poses
+    print(f'Generated {len(actions)} action steps from motion plan')
+    
+    if vis:
+        # Visualization code remains the same
+        current_pts = obs.left_shoulder_point_cloud
+        current_pcd = visualize_points(current_pts.reshape(-1, 3))
+        action_vis = []
+        for i in range(len(actions)):
+            action_vis.append(vis_pose(actions[i][:3], 
+                            Rot.from_quat(actions[i][3:7]).as_matrix()))
+        world = o3d.geometry.TriangleMesh.create_coordinate_frame(
+            size=0.1, origin=[0,0,0])
+        plan_trajectory = visualize_3d_trajectory(
+            post_gripper_poses[:, :3], size=0.02, 
+            cmap_name="plasma", invert=False)
+        o3d.visualization.draw_geometries(
+            action_vis + plan_trajectory + [current_pcd, world])
+    return actions
 
 class Agent(object):
     def __init__(self, method_name, config_fp=None):
@@ -270,7 +377,6 @@ class Agent(object):
             else:
                 print('Failed to find a valid grasp pose, skipping this pose')
                 continue
-        ipdb.set_trace()
             
         # Process the motion plan with smooth interpolation
         interpolated_poses = []
@@ -448,11 +554,16 @@ def main(args, sim_cfg):
         traj_fn = os.path.join(args.save_dir, task_name, method, 'result_all.pkl')
         traj_data = pickle.load(open(traj_fn, 'rb'))
     elif method == 'ours':
-        pass
+        motion_data_fp = os.path.join(args.save_dir, task_name, method, 'motion_data.pkl')
+        motion_data = pickle.load(open(motion_data_fp, 'rb'))
+        contact_pt_c2 = motion_data['contact_pt']
+        motion_plan_c2 = motion_data['motion_plan']
+        T_c2o_optimized = motion_data['T_c2o_optimized']
     else:
         raise ValueError('Invalid affordance method name')
     
-    num_trial = len(traj_data.keys())
+    # num_trial = len(traj_data.keys())
+    num_trial = 1 #! TEMP FIX for testing ours 
 
     exp_results = []
     for i in range(num_trial):
@@ -464,8 +575,30 @@ def main(args, sim_cfg):
             os.makedirs(image_save_dir, exist_ok=True)
             frame_idx = 0  # to number frames
 
+        PREDEFINED_CAM = CAMERA_POSES[task_name]
+        camera_name = PREDEFINED_CAM['camera_name']
+        set_camera_pose(PREDEFINED_CAM['camera_name'], PREDEFINED_CAM['pos'], PREDEFINED_CAM['ori'] ) # get overview of the workspace
+        
+        # smoothen the trajectory
+        print('Reset Episode')
+        descriptions, obs = task.reset()
+        obs = task.get_observation()
+        save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+        frame_idx += 1
+
         if method == 'ours':
-            pass
+            # convert the motion plan from c2 to world frame
+            camera_name = 'cam_over_shoulder_left'
+            cam_key = convert_camera_name(camera_name)
+            T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
+
+            # converting coppliaSIM camera convention to OpenGL
+            R_z_180 = np.array(
+                [[ -1,  0,  0],
+                [  0, -1,  0],
+                [  0,  0,  1]])
+            T_world_cam[:3, :3] = T_world_cam[:3,:3] @ R_z_180
+            motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
         elif method == 'RAM':
             grasp_array = traj_data[str(i)]['grasp_array']
             grasp_array = np.array(grasp_array)
@@ -480,15 +613,16 @@ def main(args, sim_cfg):
 
             post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
 
-        # smoothen the trajectory
-        print('Reset Episode')
-        descriptions, obs = task.reset()
-        obs = task.get_observation()
         task.move_to_grasp()
         obs = task.get_observation()
-        actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=True)
+        save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+        frame_idx += 1
+        # get new obs and plan actions
+        if method == 'ours':
+            actions = plan_motion_plan(obs, motion_plan_world, vis=True)
+        elif method == 'RAM':
+            actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=True)
             
-        # execute the trajectory
         episode_length = 40
         trajectory_idx = 0
         for ii in range(episode_length):
@@ -496,13 +630,9 @@ def main(args, sim_cfg):
             obs, reward, terminate = task.step(action)
             trajectory_idx+=1
 
-            if args.save_video:
-                frame = getattr(obs, f'{args.video_camera}_rgb')
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                frame_path = os.path.join(image_save_dir, f"{frame_idx:06d}.png")
-                cv2.imwrite(frame_path, frame_bgr)
-                frame_idx += 1
-                     
+            save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+            frame_idx += 1
+    
             if terminate:
                 if not reward:
                     print('All fails condition are met, task terminated')
