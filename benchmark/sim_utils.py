@@ -40,30 +40,106 @@ from pyrep.objects.vision_sensor import VisionSensor
 
 # figure out how to parse target name??
 CAMERA_POSES = {
-    "PickUpBottle":{'camera_name': 'cam_front'},
-    "PickUpCup":{'camera_name': 'cam_front'},
-    "PickUpMug":{'camera_name': 'cam_front'},
-    "PickUpBowl":{'camera_name': 'cam_front'},
+    "PickUpBottle":{
+        'camera_name': 'cam_front',
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+    "PickUpCup":{
+        'camera_name': 'cam_front',
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+    "PickUpMug":{
+        'camera_name': 'cam_front',
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+    "PickUpBowl":{
+        'camera_name': 'cam_front',
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
 
+    # "OpenDrawer":{
+    #     'camera_name': 'cam_over_shoulder_left',
+    #     'pos': [0.5, 1.6, 1.4],
+    #     'ori': [110, 0, 0]
+    # },
+
+    # "OpenMicrowave":{
+    #     'camera_name': 'cam_over_shoulder_right',
+    #     'pos': [0.2, -1.5, 1.2],
+    #     'ori': [-100, 0, 180]
+    # },
+    # "CloseDrawer":{
+    #     'camera_name': 'cam_over_shoulder_left',
+    #     'pos': [0.2, 1.6, 1.2],
+    #     'ori': [100, 0, 0]
+    # },
+    
+    # "CloseMicrowave":{
+    #     'camera_name': 'cam_over_shoulder_right',
+    #     'pos': [0.2, -1.5, 1.2],
+    #     'ori': [-100, 0, 180]
+    # },
+    # TEST
     "OpenDrawer":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [0.5, 1.6, 1.4],
-        'ori': [110, 0, 0]
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [110, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [110, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
     },
     "CloseDrawer":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [0.2, 1.6, 1.2],
-        'ori': [100, 0, 0]
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [110, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [110, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
     },
+
     "OpenMicrowave":{
-        'camera_name': 'cam_over_shoulder_right',
-        'pos': [0.2, -1.5, 1.2],
-        'ori': [-100, 0, 180]
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
     },
     "CloseMicrowave":{
-        'camera_name': 'cam_over_shoulder_right',
-        'pos': [0.2, -1.5, 1.2],
-        'ori': [-100, 0, 180]
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
     },
 
     "ToiletSeatDown":{

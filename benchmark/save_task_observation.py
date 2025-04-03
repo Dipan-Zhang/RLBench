@@ -29,10 +29,10 @@ from benchmark.sim_utils import (
     )
 
 
-def save_observation(obs, cam_name='cam_front', task_name='', object_name='',save_dir='./outputs'):
+def save_observation(obs, cam_name='cam_front', task_name='', object_name='', save_dir='./outputs'):
     "save observation to disk for affordance prediction"
     assert object_name != '', 'object name cannot be empty'
-    
+
     key_name = convert_camera_name(cam_name)
     rgb = getattr(obs, f'{key_name[:-7]}_rgb')
     depth = getattr(obs, f'{key_name[:-7]}_depth')
@@ -44,13 +44,11 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='',sav
     cam_K[1, 1] = np.abs(cam_K[1,1])
     T_world_cam = obs.misc[key_name+'_extrinsics'].copy()
 
-    save_base_dir = os.path.join(save_dir, task_name)
-    os.makedirs(save_base_dir, exist_ok=True)
 
-    task_rgb_save_fn = os.path.join(save_base_dir, 'rgb.png')
+    task_rgb_save_fn = os.path.join(save_dir, 'rgb.png')
     cv2.imwrite(task_rgb_save_fn, rgb[:,:,::-1])
 
-    pointcloud_save_fn = os.path.join(save_base_dir, 'pcd.ply')
+    pointcloud_save_fn = os.path.join(save_dir, 'pcd.ply')
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pointcloud_reshaped)
     o3d.io.write_point_cloud(pointcloud_save_fn, pcd)
@@ -59,19 +57,19 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='',sav
     task_data['pointcloud'] = pointcloud_reshaped
     task_data['T_world_cam'] = T_world_cam
     
-    task_data_save_fn = os.path.join(save_base_dir, 'task_data.npz')
+    task_data_save_fn = os.path.join(save_dir, 'task_data.npz')
     np.savez(task_data_save_fn, **task_data)
-    print(f'saved observation to {save_base_dir}')
+    print(f'saved observation to {save_dir}')
     
     # for debugging
     cropped_rgb = task_data['cropped_rgb']
-    cv2.imwrite(os.path.join(save_base_dir, 'cropped_rgb.png'), cropped_rgb[:,:,::-1])
+    cv2.imwrite(os.path.join(save_dir, 'cropped_rgb.png'), cropped_rgb[:,:,::-1])
 
 
 def main(args, sim_cfg, task_list):
     # set up env
     save_dir = args.save_dir
-    cameras =  ["front", "left_shoulder", "right_shoulder", "wrist"]
+    cameras =  ["front", "left_shoulder", "right_shoulder", "wrist", "overhead"]
     camera_resolution = [sim_cfg['cam_w'], sim_cfg['cam_h']]
     obs_config = create_obs_config(cameras, camera_resolution, method_name="")
     env = Environment(
@@ -82,6 +80,7 @@ def main(args, sim_cfg, task_list):
     obs_config=obs_config,
         headless=False)
     env.launch()
+    num_obs_per_task = args.obs_per_task
 
     for task_name in task_list:
         print(f'Processing task: {task_name}')
@@ -91,25 +90,28 @@ def main(args, sim_cfg, task_list):
             task_class = getattr(mod, task_name)
             task = env.get_task(task_class)
             obs = None
-
-            print('Reset Episode')
-            descriptions, obs = task.reset()
-            obs = task.get_observation()
-            print('<===== Task description: ====>\n', descriptions)
-            obj_name = descriptions[0].split(' ')[-1]
-            PREDEFINED_CAM = CAMERA_POSES[task_name]
-            camera_name = PREDEFINED_CAM['camera_name']
         except Exception as e:
             print(f"Error processing task {task_name}: {str(e)}")
             continue
-        if task_name == 'PickUpCup' or task_name == 'PickUpBottle' or task_name == 'PickUpMug' or task_name == 'PickUpBowl' or task_name == 'PickUpKnife':
-            save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_dir)
-        else:
-            hide_robot_temporarily('Panda')
-            set_camera_pose(PREDEFINED_CAM['camera_name'], PREDEFINED_CAM['pos'], PREDEFINED_CAM['ori'] ) # get overview of the workspace
-            obs = task.get_observation()
-            save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_dir)
-            restore_robot_position('Panda')
+        
+        print('Reset Episode')
+        descriptions, obs = task.reset()
+        obs = task.get_observation()
+        print('<===== Task description: ====>\n', descriptions)
+        obj_name = descriptions[0].split(' ')[-1]
+        PREDEFINED_CAMS = CAMERA_POSES[task_name]
+        for camera_name in PREDEFINED_CAMS.keys():
+            save_base_dir = os.path.join(save_dir, task_name, 'obs', f'{camera_name}')
+            os.makedirs(save_base_dir, exist_ok=True)
+
+            if task_name == 'PickUpCup' or task_name == 'PickUpBottle' or task_name == 'PickUpMug' or task_name == 'PickUpBowl' or task_name == 'PickUpKnife':
+                save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
+            else:
+                hide_robot_temporarily('Panda')
+                set_camera_pose(camera_name, PREDEFINED_CAMS[camera_name]['pos'], PREDEFINED_CAMS[camera_name]['ori'] ) # get overview of the workspace
+                obs = task.get_observation()
+                save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
+                restore_robot_position('Panda')
 
     print('Done')
     env.shutdown()
@@ -117,10 +119,11 @@ def main(args, sim_cfg, task_list):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task_name', type=str, default='PickUpCup', help='task name')
+    parser.add_argument('--task_name', type=str, default='pick_up_cup', help='task name')
+    parser.add_argument('--obs_per_task', type=int, default=1, help='number of observations per task')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--save', type=bool, default=True, help='whether to save images')
-    parser.add_argument('--debug', type=bool, default=False)
+    parser.add_argument('--DEBUG', action='store_true', default=False, help='debug mode')
     parser.add_argument('--save_dir', type=str, default='./outputs/', help='save directory')
     args = parser.parse_args()
 
@@ -138,8 +141,9 @@ if __name__ == '__main__':
     elif args.task_name == 'articulate':
         task_list = [underscore_string_to_camel_case(x) for x in sim_cfg['ARTICULATE_TASK_LIST']]
     else:
-        task_list = [args.task_name]
+        task_list = [underscore_string_to_camel_case(args.task_name)]
     
     main(args, sim_cfg, task_list)
 
-# python benchmark/save_task_observation.py --task_name all --debug True
+# python benchmark/save_task_observation.py --task_name all --DEBUG
+# python benchmark/save_task_observation.py --task_name open_microwave --DEBUG

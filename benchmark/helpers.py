@@ -23,6 +23,23 @@ import pickle
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def load_pickle(pickle_file):
+    try:
+        with open(pickle_file, 'rb') as f:
+            pickle_data = pickle.load(f)
+    except UnicodeDecodeError as e:
+        with open(pickle_file, 'rb') as f:
+            pickle_data = pickle.load(f, encoding='latin1')
+    except Exception as e:
+        print('Unable to load data ', pickle_file, ':', e)
+        raise
+    return pickle_data
+
+def save_pickle(pickle_file, data):
+    with open(pickle_file, 'wb') as pfile:
+        pickle.dump(data, pfile)
+
+
 def underscore_string_to_camel_case(string):
     """
     Convert a string from underscore format to camel case format.
