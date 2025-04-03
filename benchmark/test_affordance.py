@@ -17,6 +17,8 @@ from benchmark.helpers import (
                         visualize_points,
                         visualize_3d_trajectory,
                         preprocess_target_data,
+                        load_pickle,
+                        save_pickle,
                         )
 # from dataset_utils.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
 
@@ -39,10 +41,6 @@ def get_date():
     """Get the current date as a string."""
     from datetime import datetime
     return datetime.now().strftime("%Y-%m-%d")
-def transform_trajectory(affordance_cam, T_world_cam):
-    affordance_trajectory = affordance_cam @ T_world_cam[:3, :3].T + T_world_cam[:3, 3]
-    # print(f'transformed affordance trajectory: {affordance_trajectory}')
-    return affordance_trajectory
 
 def transform_motion_plan(motion_plan, T_world_cam):
     R_world_cam = T_world_cam[:3, :3]
@@ -157,6 +155,22 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
             print('Failed to find a valid grasp pose, skipping this pose')
             continue
         
+    # vis unsmooothed trajectory
+    if vis:
+        current_pts = obs.left_shoulder_point_cloud
+        current_pcd = visualize_points(current_pts.reshape(-1, 3))
+        action_vis = []
+        for i in range(len(post_gripper_poses)):
+            action_vis.append(vis_pose(post_gripper_poses[i][:3], 
+                            Rot.from_quat(post_gripper_poses[i][3:7]).as_matrix()))
+        world = o3d.geometry.TriangleMesh.create_coordinate_frame(
+            size=0.1, origin=[0,0,0])
+        plan_trajectory = visualize_3d_trajectory(
+            np.array(post_gripper_poses)[:, :3], size=0.02, 
+            cmap_name="plasma", invert=False)
+        o3d.visualization.draw_geometries(
+            action_vis + plan_trajectory + [current_pcd, world])
+    
     # Process the motion plan with smooth interpolation
     interpolated_poses = []
             
@@ -216,6 +230,10 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
         [post_gripper_poses, np.zeros((post_gripper_poses.shape[0], 1))], 
         axis=1)
     
+    # add noise to avoid devide by zero
+    noise = np.random.normal(0, 0.005, post_gripper_poses.shape)
+    post_gripper_poses[:, :3] += noise[:, :3]
+
     actions = post_gripper_poses
     print(f'Generated {len(actions)} action steps from motion plan')
     
@@ -236,10 +254,13 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
             action_vis + plan_trajectory + [current_pcd, world])
     return actions
 
-
 def main(args, sim_cfg):
+    DEBUG_VIS = args.debug_vis
+    task_name = args.task_name # TODO make this using underscore_string_to_camel_case
+    method = args.method
+    SAVE_ROOT = os.path.join(args.save_dir, task_name)
     # set up env
-    cameras =  ["front", "left_shoulder", "right_shoulder", "wrist"]
+    cameras =  ["front", "left_shoulder", "right_shoulder", "wrist", "overhead"]
     camera_resolution = [sim_cfg['cam_w'], sim_cfg['cam_h']]
     obs_config = create_obs_config(cameras, camera_resolution, method_name="")
     env = Environment(
@@ -247,8 +268,9 @@ def main(args, sim_cfg):
             arm_action_mode=EndEffectorPoseViaPlanning(absolute_mode=True, collision_checking=False), 
             gripper_action_mode=Discrete()
             ),
-    obs_config=obs_config,
-        headless=False)
+        obs_config=obs_config,
+        headless=args.headless
+    )
     env.launch()
 
     mod = importlib.import_module("rlbench.tasks")
@@ -257,131 +279,135 @@ def main(args, sim_cfg):
     task = env.get_task(task_class)
     obs = None
 
-    # set up the method
-    task_name = args.task_name
-    method = args.method
     # load affordance
-    task_data_fp = os.path.join(args.save_dir, task_name, 'task_data.npz')
-    task_data = np.load(task_data_fp, allow_pickle=True)
     if method == 'RAM':
-        traj_fn = os.path.join(args.save_dir, task_name, method, 'result_all.pkl')
+        traj_fn = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
         traj_data = pickle.load(open(traj_fn, 'rb'))
+        num_trial = len(traj_data.keys())
     elif method == 'ours':
-        motion_data_fp = os.path.join(args.save_dir, task_name, method, 'motion_data.pkl')
-        motion_data = pickle.load(open(motion_data_fp, 'rb'))
-        contact_pt_c2 = motion_data['contact_pt']
-        motion_plan_c2 = motion_data['motion_plan']
-        T_c2o_optimized = motion_data['T_c2o_optimized']
+        motion_data_fp = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
+        motion_data = load_pickle(motion_data_fp)
+        camera_names = list(motion_data.keys())
+        num_trial = len(motion_data[camera_names[0]].keys())
     else:
         raise ValueError('Invalid affordance method name')
     
-    # num_trial = len(traj_data.keys())
-    num_trial = 1 #! TEMP FIX for testing ours 
+    # num_trial = 1 #! TEMP FIX for testing ours 
 
-    exp_results = []
-    for i in range(num_trial):
-        print(f'Episode {i}')
-        if args.save_video:
-            image_save_dir = "./outputs/{}/{}/exp_results/{}/video_{}/trial_{}".format(
-                task_name, args.method, get_date(), args.video_camera, i
-            )
-            os.makedirs(image_save_dir, exist_ok=True)
-            frame_idx = 0  # to number frames
+    exp_results_all = {}
+    for camera in camera_names:
+        exp_results_obs = {}
+        for i in range(num_trial):
+            print(f'Episode {i}')
+            if args.save_video:
+                image_save_dir = "./outputs/{}/{}/exp_results/{}/video_{}/obs_{}/trial_{}".format(
+                    task_name, args.method, get_date(), args.video_camera, camera, i
+                )
+                os.makedirs(image_save_dir, exist_ok=True)
+                frame_idx = 0  # to number frames
 
-        PREDEFINED_CAM = CAMERA_POSES[task_name]
-        camera_name = PREDEFINED_CAM['camera_name']
-        set_camera_pose(PREDEFINED_CAM['camera_name'], PREDEFINED_CAM['pos'], PREDEFINED_CAM['ori'] ) # get overview of the workspace
-        
-        # smoothen the trajectory
-        print('Reset Episode')
-        descriptions, obs = task.reset()
-        obs = task.get_observation()
-        save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-        frame_idx += 1
-
-        if method == 'ours':
-            # convert the motion plan from c2 to world frame
-            camera_name = 'cam_over_shoulder_left'
-            cam_key = convert_camera_name(camera_name)
-            T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
-
-            # converting coppliaSIM camera convention to OpenGL
-            R_z_180 = np.array(
-                [[ -1,  0,  0],
-                [  0, -1,  0],
-                [  0,  0,  1]])
-            T_world_cam[:3, :3] = T_world_cam[:3,:3] @ R_z_180
-            motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
-        elif method == 'RAM':
-            grasp_array = traj_data[str(i)]['grasp_array']
-            grasp_array = np.array(grasp_array)
-            grasp_R = grasp_array[4:13].reshape(3, 3)
-            grasp_t = grasp_array[13:16]
-            grasp_T = np.eye(4)
-            grasp_T[:3, :3] = grasp_R
-            grasp_T[:3, 3] = grasp_t
-
-            post_grasp_dir = traj_data[str(i)]['post_grasp_dir']
-            post_grasp_dir = np.array(post_grasp_dir)
-
-            post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
-
-        task.move_to_grasp()
-        obs = task.get_observation()
-        save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-        frame_idx += 1
-        # get new obs and plan actions
-        if method == 'ours':
-            actions = plan_motion_plan(obs, motion_plan_world, vis=True)
-        elif method == 'RAM':
-            actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=True)
+            PREDEFINED_CAM = CAMERA_POSES[task_name]
+            set_camera_pose(camera, PREDEFINED_CAM[camera]['pos'], PREDEFINED_CAM[camera]['ori'] )
             
-        episode_length = 40
-        trajectory_idx = 0
-        for ii in range(episode_length):
-            action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
-            obs, reward, terminate = task.step(action)
-            trajectory_idx+=1
-
+            # smoothen the trajectory
+            print('Reset Episode')
+            descriptions, obs = task.reset()
+            obs = task.get_observation()
             save_frame(frame_idx, args.video_camera, obs, image_save_dir)
             frame_idx += 1
-    
-            if terminate:
-                if not reward:
-                    print('All fails condition are met, task terminated')
-                else:
-                    print('Task Success!')
-                break
+
+            if method == 'ours':
+                motion_plan_c2 = motion_data[camera][i]['motion_plan']
+                # convert the motion plan from c2 to world frame
+                cam_key = convert_camera_name(camera)
+                T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
+
+                # converting coppliaSIM camera convention to OpenGL
+                R_z_180 = np.array(
+                    [[ -1,  0,  0],
+                    [  0, -1,  0],
+                    [  0,  0,  1]])
+                T_world_cam[:3, :3] = T_world_cam[:3,:3] @ R_z_180
+                motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
+            elif method == 'RAM':
+                grasp_array = traj_data[str(i)]['grasp_array'] # TODO, make this into int
+                grasp_array = np.array(grasp_array)
+                grasp_R = grasp_array[4:13].reshape(3, 3)
+                grasp_t = grasp_array[13:16]
+                grasp_T = np.eye(4)
+                grasp_T[:3, :3] = grasp_R
+                grasp_T[:3, 3] = grasp_t
+
+                post_grasp_dir = traj_data[str(i)]['post_grasp_dir']
+                post_grasp_dir = np.array(post_grasp_dir)
+
+                post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
+
+            task.move_to_grasp()
+            obs = task.get_observation()
+            save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+            frame_idx += 1
+            # get new obs and plan actions
+            if method == 'ours':
+                actions = plan_motion_plan(obs, motion_plan_world, vis=DEBUG_VIS)
+            elif method == 'RAM':
+                actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=DEBUG_VIS)
+                
+            episode_length = 40
+            trajectory_idx = 0
+            for ii in range(episode_length):
+                action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
+                obs, reward, terminate = task.step(action)
+                trajectory_idx+=1
+
+                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+                frame_idx += 1
         
-        result = -1  # Default to failure
-        if terminate:
-            if reward:
-                result = 1
-        else:
-            print('Task Timeout!')
-            result = 0
-        exp_results.append(result)
+                if terminate:
+                    if not reward:
+                        print('All fails condition are met, task terminated')
+                    else:
+                        print('Task Success!')
+                    break
+            
+            result = -1  # Default to failure
+            if terminate:
+                if reward:
+                    result = 1
+            else:
+                print('Task Timeout!')
+                result = 0
+            exp_results_obs[i] = result
 
-        # compose video
-        if args.save_video:
-            cmd = "ffmpeg -framerate 30 -start_number 0 -i {}/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/output.mp4".format(
-                image_save_dir, image_save_dir
-            )
-            os.system(cmd)
 
+            # compose video
+            if args.save_video:
+                cmd = "ffmpeg -framerate 30 -start_number 0 -i {}/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/output.mp4 -y".format(
+                    image_save_dir, image_save_dir
+                )
+                os.system(cmd)
+        if args.save:
+            # Save the observation
+            save_fn = os.path.join(SAVE_ROOT, method, camera, 'results.pkl')
+            save_pickle(save_fn, exp_results_obs)
+                
+        exp_results_all[camera] = exp_results_obs
+    
+    exp_results_all_save_fp = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
+    save_pickle(exp_results_all_save_fp, exp_results_all)
     # save the results
-    if args.save:
-        save_results_dir = "./outputs/{}/{}/exp_results/{}/".format(
-            task_name, args.method, get_date()
-        )
-        os.makedirs(save_results_dir, exist_ok=True)
-        save_results_path = os.path.join(save_results_dir, 'result.csv')
-        to_write = {
-            "ID": np.arange(len(exp_results)),
-            "scores": exp_results,
-        }
-        df = pd.DataFrame(to_write)
-        df = df.to_csv(save_results_path, mode="w", index=None)
+    # if args.save:
+    #     save_results_dir = "./outputs/{}/{}/exp_results/{}/".format(
+    #         task_name, args.method, get_date()
+    #     )
+    #     os.makedirs(save_results_dir, exist_ok=True)
+    #     save_results_path = os.path.join(save_results_dir, 'result.csv')
+    #     to_write = {
+    #         "ID": np.arange(len(exp_results)),
+    #         "scores": exp_results,
+    #     }
+    #     df = pd.DataFrame(to_write)
+    #     df = df.to_csv(save_results_path, mode="w", index=None)
 
     print('Done')
     env.shutdown()
@@ -396,8 +422,9 @@ if __name__ == '__main__':
     parser.add_argument('--save', type=bool, default=True, help='whether to save images')
     parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
-    parser.add_argument('--debug', type=bool, default=False)
     parser.add_argument('--save_dir', type=str, default='./outputs/', help='save directory')
+    parser.add_argument('--debug_vis', action='store_true')
+    parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
 
     sim_cfg_fp = args.sim_config_fp
@@ -406,14 +433,14 @@ if __name__ == '__main__':
     main(args, sim_cfg)
 
 # Portable 
-# python benchmark/test_affordance.py --task_name PickUpCup --method ours --debug True
-# python benchmark/test_affordance.py --task_name PickUpBottle --method ours  --debug True
-# python benchmark/test_affordance.py --task_name PickUpMug --method ours  --debug True
-# python benchmark/test_affordance.py --task_name PickUpBowl --method ours  --debug True
+# python benchmark/test_affordance.py --task_name PickUpCup --method ours --debug_vis 
+# python benchmark/test_affordance.py --task_name PickUpBottle --method ours  --debug_vis 
+# python benchmark/test_affordance.py --task_name PickUpMug --method ours  --debug_vis 
+# python benchmark/test_affordance.py --task_name PickUpBowl --method ours  --debug_vis 
 
 # Articulate
-# python benchmark/test_affordance.py --task_name OpenDrawer --method ours  --debug True
-# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --debug True
+# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --debug_vis
 
 
 
