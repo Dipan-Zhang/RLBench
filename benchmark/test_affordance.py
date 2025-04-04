@@ -19,6 +19,7 @@ from benchmark.helpers import (
                         preprocess_target_data,
                         load_pickle,
                         save_pickle,
+                        visualize_motion_plan,
                         )
 # from dataset_utils.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
 
@@ -43,14 +44,13 @@ def get_time():
     curr_time = time.strftime("%Y-%m-%d-%H-%M")
     return curr_time
 
-def transform_motion_plan(motion_plan, T_world_cam):
-    # ! BUG: the motion plan seems to be reversed when camera is on the left side
+def transform_motion_plan(motion_plan, T_world_cam, scale=1.0):
     R_world_cam = T_world_cam[:3, :3]
     motion_plan_world = []
     for (R, t, success) in motion_plan:
-        R = R_world_cam @ R @ R_world_cam.T
-        t = R_world_cam @ t
-        motion_plan_world.append((R, t, success))
+        new_R = R_world_cam @ R @ R_world_cam.T
+        new_t = (R_world_cam @ t[..., None]).squeeze() / scale
+        motion_plan_world.append((new_R, new_t, success))
     return motion_plan_world
 
 def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
@@ -148,7 +148,7 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
         if success:
             motion_rotation = Rot.from_matrix(R)
             new_gripper_rotation = current_gripper_rotation * motion_rotation
-            new_pos = (np.matmul(R, current_gripper_translation[:, np.newaxis]) + t[:, np.newaxis]).squeeze()
+            new_pos = np.matmul(R, t[:, np.newaxis]).squeeze() + current_gripper_translation
 
             post_gripper_poses.append(np.concatenate([new_pos, new_gripper_rotation.as_quat()]))
             current_gripper_translation = new_pos
@@ -357,7 +357,7 @@ def main(args, sim_cfg):
             elif method == 'RAM':
                 actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=DEBUG_VIS)
                 
-            episode_length = 40
+            episode_length = 20
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
@@ -374,7 +374,7 @@ def main(args, sim_cfg):
                         print('Task Success!')
                     break
             
-            result = -1  # Default to failure
+            result = 0  # Default to failure
             if terminate:
                 if reward:
                     result = 1
@@ -383,7 +383,6 @@ def main(args, sim_cfg):
                 result = 0
             
             result_list.append(result)
-
 
             # compose video
             if args.save_video:
