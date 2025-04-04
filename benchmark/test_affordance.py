@@ -37,12 +37,14 @@ from typing import List, Tuple
 import gc
 import pickle
 
-def get_date():
+def get_time():
     """Get the current date as a string."""
-    from datetime import datetime
-    return datetime.now().strftime("%Y-%m-%d")
+    import time
+    curr_time = time.strftime("%Y-%m-%d-%H-%M")
+    return curr_time
 
 def transform_motion_plan(motion_plan, T_world_cam):
+    # ! BUG: the motion plan seems to be reversed when camera is on the left side
     R_world_cam = T_world_cam[:3, :3]
     motion_plan_world = []
     for (R, t, success) in motion_plan:
@@ -255,7 +257,7 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
     return actions
 
 def main(args, sim_cfg):
-    DEBUG_VIS = args.debug_vis
+    DEBUG_VIS = args.DEBUG_VIS
     task_name = args.task_name # TODO make this using underscore_string_to_camel_case
     method = args.method
     SAVE_ROOT = os.path.join(args.save_dir, task_name)
@@ -296,12 +298,12 @@ def main(args, sim_cfg):
 
     exp_results_all = {}
     for camera in camera_names:
-        exp_results_obs = {}
+        result_list = []
         for i in range(num_trial):
             print(f'Episode {i}')
             if args.save_video:
                 image_save_dir = "./outputs/{}/{}/exp_results/{}/video_{}/obs_{}/trial_{}".format(
-                    task_name, args.method, get_date(), args.video_camera, camera, i
+                    task_name, args.method, get_time(), args.video_camera, camera, i
                 )
                 os.makedirs(image_save_dir, exist_ok=True)
                 frame_idx = 0  # to number frames
@@ -313,8 +315,9 @@ def main(args, sim_cfg):
             print('Reset Episode')
             descriptions, obs = task.reset()
             obs = task.get_observation()
-            save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-            frame_idx += 1
+            if args.save_video:
+                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+                frame_idx += 1
 
             if method == 'ours':
                 motion_plan_c2 = motion_data[camera][i]['motion_plan']
@@ -345,8 +348,9 @@ def main(args, sim_cfg):
 
             task.move_to_grasp()
             obs = task.get_observation()
-            save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-            frame_idx += 1
+            if args.save_video:
+                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+                frame_idx += 1
             # get new obs and plan actions
             if method == 'ours':
                 actions = plan_motion_plan(obs, motion_plan_world, vis=DEBUG_VIS)
@@ -359,9 +363,9 @@ def main(args, sim_cfg):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
                 obs, reward, terminate = task.step(action)
                 trajectory_idx+=1
-
-                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-                frame_idx += 1
+                if args.save_video:
+                    save_frame(frame_idx, args.video_camera, obs, image_save_dir)
+                    frame_idx += 1
         
                 if terminate:
                     if not reward:
@@ -377,7 +381,8 @@ def main(args, sim_cfg):
             else:
                 print('Task Timeout!')
                 result = 0
-            exp_results_obs[i] = result
+            
+            result_list.append(result)
 
 
             # compose video
@@ -386,19 +391,25 @@ def main(args, sim_cfg):
                     image_save_dir, image_save_dir
                 )
                 os.system(cmd)
-        if args.save:
+        if not args.no_save_result:
             # Save the observation
-            save_fn = os.path.join(SAVE_ROOT, method, camera, 'results.pkl')
-            save_pickle(save_fn, exp_results_obs)
-                
-        exp_results_all[camera] = exp_results_obs
+            save_fn = os.path.join(SAVE_ROOT, method, camera, 'exp_result.csv')
+            to_write = {
+                "camera_name": camera,
+                "ID": np.arange(len(result_list)),
+                "scores": result_list,
+            }
+            df = pd.DataFrame(to_write)
+            df = df.to_csv(save_fn, mode="w", index=None)
+        
+        exp_results_all[camera] = result_list
     
-    exp_results_all_save_fp = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
+    exp_results_all_save_fp = os.path.join(SAVE_ROOT, method, 'exp_results_all.pkl')
     save_pickle(exp_results_all_save_fp, exp_results_all)
     # save the results
-    # if args.save:
+    # if not args.no_save_result:
     #     save_results_dir = "./outputs/{}/{}/exp_results/{}/".format(
-    #         task_name, args.method, get_date()
+    #         task_name, args.method, get_time()
     #     )
     #     os.makedirs(save_results_dir, exist_ok=True)
     #     save_results_path = os.path.join(save_results_dir, 'result.csv')
@@ -419,11 +430,11 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, default='PickUpCup', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
-    parser.add_argument('--save', type=bool, default=True, help='whether to save images')
+    parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
     parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
     parser.add_argument('--save_dir', type=str, default='./outputs/', help='save directory')
-    parser.add_argument('--debug_vis', action='store_true')
+    parser.add_argument('--DEBUG_VIS', action='store_true')
     parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
 
@@ -433,14 +444,17 @@ if __name__ == '__main__':
     main(args, sim_cfg)
 
 # Portable 
-# python benchmark/test_affordance.py --task_name PickUpCup --method ours --debug_vis 
-# python benchmark/test_affordance.py --task_name PickUpBottle --method ours  --debug_vis 
-# python benchmark/test_affordance.py --task_name PickUpMug --method ours  --debug_vis 
-# python benchmark/test_affordance.py --task_name PickUpBowl --method ours  --debug_vis 
+# python benchmark/test_affordance.py --task_name PickUpCup --method ours --DEBUG_VIS 
+# python benchmark/test_affordance.py --task_name PickUpBottle --method ours  --DEBUG_VIS 
+# python benchmark/test_affordance.py --task_name PickUpMug --method ours  --DEBUG_VIS 
+# python benchmark/test_affordance.py --task_name PickUpBowl --method ours  --DEBUG_VIS 
 
 # Articulate
 # python benchmark/test_affordance.py --task_name OpenMicrowave --method ours --save_video True --video_camera left_shoulder
-# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --debug_vis
+# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --DEBUG_VIS
+
+# python benchmark/test_affordance.py --task_name CloseMicrowave --method ours --save_video True --video_camera left_shoulder
+
 
 
 
