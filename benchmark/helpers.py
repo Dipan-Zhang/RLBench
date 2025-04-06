@@ -40,10 +40,51 @@ def save_pickle(pickle_file, data):
         pickle.dump(data, pfile)
 
 
+def apply_motion_plan(pose_init, motion_plan):
+    """apply motion plan to the initial pose, from relative R, t to absolute pose
+    Args:
+    - pose_init: [4, 4], 
+    - motion_plan: List[(R, t, success), ...], R: [3, 3], t: [3, ]
+    Returns:
+    - poses: [4, 4], list of *absolute* poses
+    """
+    poses = [pose_init.copy()]
+    current_pose = poses[0]
+    
+    for R, t, success in motion_plan:
+        if not success:
+            print("Skip invalid motion plan")
+            continue
+        new_pose = np.eye(4)
+        new_pose[:3, :3] = current_pose[:3, :3] @ R
+        pos = current_pose[:3, 3].copy()
+        new_pose[:3, 3] = np.matmul(R, pos[..., None]).squeeze() + t
+        poses.append(new_pose)
+        current_pose = new_pose
+    return poses
+
+def visualize_motion_plan(contact_pt, motion_plan):
+    "visualize motion plan with contact point, contact_pt: [3,], motion_plan: [(R, t, success), ..."
+    assert motion_plan[0][0].shape == (3, 3) and motion_plan[0][1].shape == (3,), "motion plan should be (R, t)"
+    assert contact_pt.shape == (3,)
+
+    contact_pt_transform = np.eye(4)
+    contact_pt_transform[:3, 3] = contact_pt
+    poses = apply_motion_plan(contact_pt_transform, motion_plan)
+    
+    poses_vis = []
+    for pose in poses:
+        mesh = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+        mesh.transform(pose)
+        poses_vis.append(mesh)
+
+    world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5, origin=[0, 0, 0])
+    return [world] + poses_vis
+
 def underscore_string_to_camel_case(string):
     """
     Convert a string from underscore format to camel case format.
-    For example, 'my_variable_name' becomes 'MyVariableName'.
+    'my_variable_name' -> 'MyVariableName'.
     """
     components = string.split('_')
     return ''.join(x.title() for x in components) 
@@ -276,3 +317,10 @@ def visualize_points(points, colors=None):
     if colors is not None:
         pcd.colors = o3d.utility.Vector3dVector(colors)
     return pcd
+
+
+def get_time():
+    """Get the current date as a string."""
+    import time
+    curr_time = time.strftime("%Y-%m-%d-%H-%M")
+    return curr_time

@@ -142,29 +142,86 @@ CAMERA_POSES = {
         }
     },
 
-    "ToiletSeatDown":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-0.3, 1.6, 1.2],
-        'ori': [105, 15, 0],
+    "OpenDishwasher":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+    "CloseLaptopLid":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+    "DownToiletSeat":{
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [110, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [110, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
     },
 
-    "SlideCabinetOpen":{
-        'camera_name': 'cam_over_shoulder_left',
-        'pos': [-0.8, 0.0, 1.2],
-        'ori': [180, 75, -90]
+    "OpenSlideCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-0.8, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-0.8, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-0.8, 0.0, 1.9],
+        'ori': [-180, 55, -90]
+        }
     },
+
+    # "ToiletSeatUp":{
+    #     'cam_over_shoulder_left':{
+    #         'pos': [0.5, 1.6, 1.4],
+    #         'ori': [110, -5, 0]
+    #     },
+    #     'cam_over_shoulder_right':{
+    #         'pos': [-0.1, 1.6, 1.4],
+    #         'ori': [110, 5, 0]
+    #     },
+    #     'cam_overhead':{
+    #         'pos': [0.2, 1.6, 1.7],
+    #         'ori': [110, 0, 0]
+    #     }
+    # },
+
     
     # still missing: open/ close cabinet
     # needs to tune pos
-    # "ToiletSeatUp":{
-    #     'camera_name': 'cam_over_shoulder_left',
-    #     'pos': [-0.3, 1.6, 1.2],
-    #     'ori': [105, 15, 0],
-    # },
+
 
     # "OpenWashingMachin":{},
     # "OpenOven":{},
-    # "CloseLaptopLid":{},
     # "OpenCabinet": {}, 
     # "OpenDoor":{
     #     'camera_name': 'cam_over_shoulder_left',
