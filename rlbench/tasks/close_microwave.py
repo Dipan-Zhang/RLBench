@@ -11,7 +11,7 @@ class CloseMicrowave(Task):
 
     def init_task(self) -> None:
         self.register_success_conditions([JointCondition(
-            Joint('microwave_door_joint'), np.deg2rad(40))])
+            Joint('microwave_door_joint'), np.deg2rad(20))])
 
     def init_episode(self, index: int) -> List[str]:
         return ['close microwave',
