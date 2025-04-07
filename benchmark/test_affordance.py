@@ -12,7 +12,7 @@ from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, EndEffectorPoseViaIK
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
-
+from pyrep.errors import ConfigurationPathError
 from benchmark.helpers import (
                         visualize_points,
                         visualize_3d_trajectory,
@@ -20,9 +20,8 @@ from benchmark.helpers import (
                         load_pickle,
                         save_pickle,
                         visualize_motion_plan,
+                        apply_motion_plan
                         )
-# from dataset_utils.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
-
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 from scipy.spatial.transform import Rotation as Rot
 from scipy.spatial.transform import Slerp
@@ -38,20 +37,27 @@ from typing import List, Tuple
 import gc
 import pickle
 
-def get_time():
-    """Get the current date as a string."""
-    import time
-    curr_time = time.strftime("%Y-%m-%d-%H-%M")
-    return curr_time
+def transform_motion_plan(motion_plan, T_cam_obj, scale=1.0):
+    """
+    Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
 
-def transform_motion_plan(motion_plan, T_world_cam, scale=1.0):
-    R_world_cam = T_world_cam[:3, :3]
-    motion_plan_world = []
-    for (R, t, success) in motion_plan:
-        new_R = R_world_cam @ R @ R_world_cam.T
-        new_t = (R_world_cam @ t[..., None]).squeeze() / scale
-        motion_plan_world.append((new_R, new_t, success))
-    return motion_plan_world
+    Each (R, t) in motion_plan is a relative transform in the object frame.
+    """
+    T_obj_cam = np.linalg.inv(T_cam_obj)  # Needed for change of basis
+    motion_plan_cam = []
+
+    for R_obj, t_obj, success in motion_plan:
+        T_rel_obj = np.eye(4)
+        T_rel_obj[:3, :3] = R_obj
+        T_rel_obj[:3, 3] = t_obj
+
+        T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
+
+        R_cam = T_rel_cam[:3, :3]
+        t_cam = T_rel_cam[:3, 3] / scale
+        motion_plan_cam.append((R_cam, t_cam, success))
+
+    return motion_plan_cam
 
 def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
     # Generate a post-grasp trajectory
@@ -140,22 +146,19 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
     """Plan smooth gripper trajectory based on motion plan"""
     current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
     
-    post_gripper_poses = []
-    current_gripper_rotation = Rot.from_quat(current_gripper_pose[3:7])
-    current_gripper_translation = current_gripper_pose[:3]
-    post_gripper_poses.append(current_gripper_pose[:7])
-    for (R, t, success) in motion_plan_world:
-        if success:
-            motion_rotation = Rot.from_matrix(R)
-            new_gripper_rotation = current_gripper_rotation * motion_rotation
-            new_pos = np.matmul(R, t[:, np.newaxis]).squeeze() + current_gripper_translation
+    gripper_pose_matrix = np.eye(4)
+    gripper_pose_matrix[:3, :3] = Rot.from_quat(current_gripper_pose[3:7]).as_matrix()
+    gripper_pose_matrix[:3, 3] = current_gripper_pose[:3]
 
-            post_gripper_poses.append(np.concatenate([new_pos, new_gripper_rotation.as_quat()]))
-            current_gripper_translation = new_pos
-            current_gripper_rotation = new_gripper_rotation
-        else:
-            print('Failed to find a valid grasp pose, skipping this pose')
-            continue
+    post_gripper_matrices = apply_motion_plan(
+        gripper_pose_matrix, motion_plan_world)
+    
+    post_gripper_poses = []
+    for i in range(len(post_gripper_matrices)):
+        post_gripper_pose = post_gripper_matrices[i]
+        post_gripper_rotation = Rot.from_matrix(post_gripper_pose[:3, :3])
+        post_gripper_translation = post_gripper_pose[:3, 3]
+        post_gripper_poses.append(np.concatenate([post_gripper_translation, post_gripper_rotation.as_quat()]))
         
     # vis unsmooothed trajectory
     if vis:
@@ -260,7 +263,8 @@ def main(args, sim_cfg):
     DEBUG_VIS = args.DEBUG_VIS
     task_name = args.task_name # TODO make this using underscore_string_to_camel_case
     method = args.method
-    SAVE_ROOT = os.path.join(args.save_dir, task_name)
+    SAVE_ROOT = args.trial_dir
+    trial_name = SAVE_ROOT.split('/')[-1]
     # set up env
     cameras =  ["front", "left_shoulder", "right_shoulder", "wrist", "overhead"]
     camera_resolution = [sim_cfg['cam_w'], sim_cfg['cam_h']]
@@ -283,11 +287,11 @@ def main(args, sim_cfg):
 
     # load affordance
     if method == 'RAM':
-        traj_fn = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
+        traj_fn = os.path.join(SAVE_ROOT, 'retrieved_motion_all.pkl')
         traj_data = pickle.load(open(traj_fn, 'rb'))
         num_trial = len(traj_data.keys())
     elif method == 'ours':
-        motion_data_fp = os.path.join(SAVE_ROOT, method, 'results_all.pkl')
+        motion_data_fp = os.path.join(SAVE_ROOT, 'transferred_motion_all.pkl')
         motion_data = load_pickle(motion_data_fp)
         camera_names = list(motion_data.keys())
         num_trial = len(motion_data[camera_names[0]].keys())
@@ -300,10 +304,10 @@ def main(args, sim_cfg):
     for camera in camera_names:
         result_list = []
         for i in range(num_trial):
-            print(f'Episode {i}')
+            print(f'Camera {camera}, Episode {i}')
             if args.save_video:
-                image_save_dir = "./outputs/{}/{}/exp_results/{}/video_{}/obs_{}/trial_{}".format(
-                    task_name, args.method, get_time(), args.video_camera, camera, i
+                image_save_dir = "./outputs/{}/exp_results/{}/{}/video_{}/obs_{}/trial_{}".format(
+                    task_name, method, trial_name, args.video_camera, camera, i
                 )
                 os.makedirs(image_save_dir, exist_ok=True)
                 frame_idx = 0  # to number frames
@@ -330,7 +334,7 @@ def main(args, sim_cfg):
                     [[ -1,  0,  0],
                     [  0, -1,  0],
                     [  0,  0,  1]])
-                T_world_cam[:3, :3] = T_world_cam[:3,:3] @ R_z_180
+                T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
                 motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
             elif method == 'RAM':
                 grasp_array = traj_data[str(i)]['grasp_array'] # TODO, make this into int
@@ -341,7 +345,7 @@ def main(args, sim_cfg):
                 grasp_T[:3, :3] = grasp_R
                 grasp_T[:3, 3] = grasp_t
 
-                post_grasp_dir = traj_data[str(i)]['post_grasp_dir']
+                post_grasp_dir = traj_data[i]['post_grasp_dir']
                 post_grasp_dir = np.array(post_grasp_dir)
 
                 post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
@@ -360,7 +364,7 @@ def main(args, sim_cfg):
             episode_length = 20
             trajectory_idx = 0
             for ii in range(episode_length):
-                action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05)
+                action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 obs, reward, terminate = task.step(action)
                 trajectory_idx+=1
                 if args.save_video:
@@ -392,7 +396,7 @@ def main(args, sim_cfg):
                 os.system(cmd)
         if not args.no_save_result:
             # Save the observation
-            save_fn = os.path.join(SAVE_ROOT, method, camera, 'exp_result.csv')
+            save_fn = os.path.join(SAVE_ROOT, camera, 'exp_result.csv')
             to_write = {
                 "camera_name": camera,
                 "ID": np.arange(len(result_list)),
@@ -403,7 +407,9 @@ def main(args, sim_cfg):
         
         exp_results_all[camera] = result_list
     
-    exp_results_all_save_fp = os.path.join(SAVE_ROOT, method, 'exp_results_all.pkl')
+    exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
+    os.makedirs(exp_save_dir, exist_ok=True)
+    exp_results_all_save_fp = os.path.join(exp_save_dir, 'exp_results_all.pkl')
     save_pickle(exp_results_all_save_fp, exp_results_all)
     # save the results
     # if not args.no_save_result:
@@ -430,9 +436,10 @@ if __name__ == '__main__':
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
+    parser.add_argument('--trial_dir', type=str, help='directory to save results')
     parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
-    parser.add_argument('--save_dir', type=str, default='./outputs/', help='save directory')
+    parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
     parser.add_argument('--DEBUG_VIS', action='store_true')
     parser.add_argument('--headless', action='store_true')
     args = parser.parse_args()
