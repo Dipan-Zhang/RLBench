@@ -10,6 +10,7 @@ from rlbench.tasks.close_fridge import CloseFridge
 from rlbench.tasks.close_grill import CloseGrill
 from rlbench.tasks.close_jar import CloseJar
 from rlbench.tasks.close_laptop_lid import CloseLaptopLid
+from rlbench.tasks.close_laptop import CloseLaptop
 from rlbench.tasks.close_microwave import CloseMicrowave
 from rlbench.tasks.empty_container import EmptyContainer
 from rlbench.tasks.empty_dishwasher import EmptyDishwasher
@@ -30,7 +31,9 @@ from rlbench.tasks.move_hanger import MoveHanger
 from rlbench.tasks.open_box import OpenBox
 from rlbench.tasks.open_door import OpenDoor
 from rlbench.tasks.open_drawer import OpenDrawer
-# from rlbench.tasks.open_drawer_fixed import OpenDrawerFixed
+from rlbench.tasks.open_drawer_fixed import OpenDrawerFixed
+from rlbench.tasks.open_dishwasher import OpenDishwasher
+from rlbench.tasks.open_slide_cabinet import OpenSlideCabinet
 from rlbench.tasks.open_fridge import OpenFridge
 from rlbench.tasks.open_grill import OpenGrill
 from rlbench.tasks.open_jar import OpenJar
@@ -107,6 +110,7 @@ from rlbench.tasks.take_umbrella_out_of_umbrella_stand import \
     TakeUmbrellaOutOfUmbrellaStand
 from rlbench.tasks.take_usb_out_of_computer import TakeUsbOutOfComputer
 from rlbench.tasks.toilet_seat_down import ToiletSeatDown
+from rlbench.tasks.down_toilet_seat import DownToiletSeat
 from rlbench.tasks.toilet_seat_up import ToiletSeatUp
 from rlbench.tasks.turn_oven_on import TurnOvenOn
 from rlbench.tasks.turn_tap import TurnTap

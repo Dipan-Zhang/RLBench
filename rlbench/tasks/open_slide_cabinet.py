@@ -18,7 +18,7 @@ class OpenSlideCabinet(Task):
 
     def init_episode(self, index: int) -> List[str]:
         self.register_success_conditions(
-            [JointCondition(self.left_joint, 0.06),
+            [JointCondition(self.left_joint, 0.05),
                 NothingGrasped(self.robot.gripper)])
 
 

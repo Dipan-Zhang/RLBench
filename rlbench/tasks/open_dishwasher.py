@@ -17,8 +17,6 @@ class OpenDishwasher(Task):
                     Joint('dishwasher_door_joint'), np.deg2rad(30))])
 
     def init_episode(self, index: int) -> List[str]:
-        self.register_success_conditions([JointCondition(
-            Joint('dishwasher_door_joint'), np.deg2rad(30))])
         return ['open the  dishwasher door',
                 'open the dishwasher till fully open'
                 ]

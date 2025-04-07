@@ -156,7 +156,7 @@ CAMERA_POSES = {
             'ori': [-115, 0, -180]
         }
     },
-    "CloseLaptopLid":{
+    "CloseLaptop":{
         'cam_over_shoulder_left':{
             'pos': [0.8, -1.5, 1.2],
             'ori': [-100, -14, 180]
