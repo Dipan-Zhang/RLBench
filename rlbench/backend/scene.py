@@ -455,7 +455,7 @@ class Scene(object):
         return processed_demo
 
 
-    def move_to_grasp(self, record: bool = True,
+    def move_to_grasp(self, wp_cut=1, record: bool = True,
                  callable_each_step: Callable[[Observation], None] = None,
                  randomly_place: bool = True) -> Demo:
         """Returns a demo (list of observations)"""
@@ -478,10 +478,13 @@ class Scene(object):
             self._joint_position_action = None
             gripper_open = 1.0 if self.robot.gripper.get_open_amount()[0] > 0.9 else 0.0
         else:
-            gripper_open = 0.0 # hotfix
+            gripper_open = 1.0 # hotfix
         while True:
             success = False
             for i, point in enumerate(waypoints):
+                if i == len(waypoints) - wp_cut:
+                    point.skip = True
+                    break
                 point.start_of_path()
                 if point.skip:
                     continue

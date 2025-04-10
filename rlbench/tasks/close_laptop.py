@@ -7,7 +7,7 @@ from rlbench.backend.task import Task
 class CloseLaptop(Task):
 
     def init_task(self) -> None:
-        self.register_success_conditions([JointCondition(Joint('joint'), 0.4)])
+        self.register_success_conditions([JointCondition(Joint('joint'), 1.0)])
 
     def init_episode(self, index: int) -> List[str]:
         return ['close laptop lid',
