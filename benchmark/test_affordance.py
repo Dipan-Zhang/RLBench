@@ -12,6 +12,8 @@ from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, EndEffectorPoseViaIK
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
+from rlbench.backend.exceptions import InvalidActionError
+
 from pyrep.errors import ConfigurationPathError
 from benchmark.helpers import (
                         visualize_points,
@@ -37,7 +39,7 @@ from typing import List, Tuple
 import gc
 import pickle
 
-def transform_motion_plan(motion_plan, T_cam_obj, scale=1.0):
+def transform_motion_plan(motion_plan, T_cam_obj):
     """
     Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
 
@@ -54,7 +56,7 @@ def transform_motion_plan(motion_plan, T_cam_obj, scale=1.0):
         T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
 
         R_cam = T_rel_cam[:3, :3]
-        t_cam = T_rel_cam[:3, 3] / scale
+        t_cam = T_rel_cam[:3, 3]
         motion_plan_cam.append((R_cam, t_cam, success))
 
     return motion_plan_cam
@@ -64,7 +66,7 @@ def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
     post_grasp_trajectory = []
     for i in range(10):
         t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.04)
-        print(t)
+
         post_grasp_trajectory.append(t)
     return np.array(post_grasp_trajectory)
 
@@ -264,6 +266,9 @@ def main(args, sim_cfg):
     task_name = args.task_name # TODO make this using underscore_string_to_camel_case
     method = args.method
     SAVE_ROOT = args.trial_dir
+    assert method in args.trial_dir, 'trial_dir conflicts with method name'
+    assert task_name in args.trial_dir, 'trial_dir conflicts with task name'
+
     trial_name = SAVE_ROOT.split('/')[-1]
     # set up env
     cameras =  ["front", "left_shoulder", "right_shoulder", "wrist", "overhead"]
@@ -289,7 +294,8 @@ def main(args, sim_cfg):
     if method == 'RAM':
         traj_fn = os.path.join(SAVE_ROOT, 'retrieved_motion_all.pkl')
         traj_data = pickle.load(open(traj_fn, 'rb'))
-        num_trial = len(traj_data.keys())
+        camera_names = list(traj_data.keys())
+        num_trial = len(traj_data[camera_names[0]].keys())
     elif method == 'ours':
         motion_data_fp = os.path.join(SAVE_ROOT, 'transferred_motion_all.pkl')
         motion_data = load_pickle(motion_data_fp)
@@ -336,8 +342,12 @@ def main(args, sim_cfg):
                     [  0,  0,  1]])
                 T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
                 motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
+                # ipdb.set_trace()
+                # print(obs.gripper_pose[:3])
+                # pcd = visualize_points(obs.left_shoulder_point_cloud.reshape(-1, 3))
+                # o3d.visualization.draw([pcd] + visualize_motion_plan(np.array([ 0.27845454, -0.00815381,  1.47199416]), motion_plan_world))
             elif method == 'RAM':
-                grasp_array = traj_data[str(i)]['grasp_array'] # TODO, make this into int
+                grasp_array = traj_data[camera][i]['grasp_array']
                 grasp_array = np.array(grasp_array)
                 grasp_R = grasp_array[4:13].reshape(3, 3)
                 grasp_t = grasp_array[13:16]
@@ -345,17 +355,19 @@ def main(args, sim_cfg):
                 grasp_T[:3, :3] = grasp_R
                 grasp_T[:3, 3] = grasp_t
 
-                post_grasp_dir = traj_data[i]['post_grasp_dir']
+                post_grasp_dir = traj_data[camera][i]['post_grasp_dir']
                 post_grasp_dir = np.array(post_grasp_dir)
 
                 post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
 
             task.move_to_grasp()
             obs = task.get_observation()
+    
             if args.save_video:
                 save_frame(frame_idx, args.video_camera, obs, image_save_dir)
                 frame_idx += 1
             # get new obs and plan actions
+            # ipdb.set_trace()
             if method == 'ours':
                 actions = plan_motion_plan(obs, motion_plan_world, vis=DEBUG_VIS)
             elif method == 'RAM':
@@ -365,7 +377,11 @@ def main(args, sim_cfg):
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
-                obs, reward, terminate = task.step(action)
+                try:
+                    obs, reward, terminate = task.step(action)
+                except InvalidActionError as e:
+                    print(f"Invalid action: {e}, cancel this trial")
+                    break
                 trajectory_idx+=1
                 if args.save_video:
                     save_frame(frame_idx, args.video_camera, obs, image_save_dir)
