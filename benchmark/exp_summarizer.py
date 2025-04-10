@@ -18,11 +18,12 @@ def save_pickle(pickle_file, data):
         pickle.dump(data, pfile)
 
 import argparse
+import pandas as pd
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--exp_results_fp', type=str, default='outputs/OpenMicrowave/ours/trial_2025-04-06_20-20/exp_results/exp_results_all.pkl')
+    parser.add_argument('-t', '--trial', type=str, default='outputs/OpenMicrowave/ours/trial_2025-04-06_20-20/exp_results/exp_results_all.pkl')
     args = parser.parse_args()
-    exp_results_fp = args.exp_results_fp
+    exp_results_fp = os.path.join(args.trial, 'exp_results', 'exp_results_all.pkl')
     exp_results = load_pickle(exp_results_fp)
     exp_summarized = {}
     for camera_name in exp_results.keys():
@@ -31,3 +32,9 @@ if __name__ == '__main__':
         exp_results[camera_name] = exp_result
     exp_summarized['all'] = np.mean(list(exp_summarized.values()), axis=0)
     print(exp_summarized)
+
+    # save summarized results
+    exp_results_save_fp = os.path.join(args.trial, 'exp_results', 'summarized.csv')
+    exp_results_df = pd.DataFrame(exp_results)
+    exp_results_df.to_csv(exp_results_save_fp)
+    print(f"Saved summarized results to {exp_results_save_fp}")

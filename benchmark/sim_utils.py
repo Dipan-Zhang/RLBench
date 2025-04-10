@@ -200,6 +200,21 @@ CAMERA_POSES = {
         }
     },
 
+    "OpenFridge":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+
     # "ToiletSeatUp":{
     #     'cam_over_shoulder_left':{
     #         'pos': [0.5, 1.6, 1.4],

@@ -49,22 +49,22 @@ PORTABLE_TASK_LIST:
 # must have: open close cabinet, drawer, microwave| open fridge, oven, washing machine 
 ARTICULATE_TASK_LIST:
   [
-    'open_drawer', # done, low SR, draw1 low quality, try drawer2
-    'close_drawer', 
-    'open_microwave', # ready for demo
-    'close_microwave', 
-    'toilet_seat_down', # ready for demo gen
-    'toilet_seat_up', # create special case for this
+    'open_drawer', 
+    'close_drawer',
+    'open_microwave',
+    'close_microwave',
+    'open_dishwasher',
+    'open_fridge', 
 
-    'slide_cabinet_open',  # needs a kinect demo
+    'close_laptop',
+    'toilet_seat_down',
+    'slide_cabinet_open',
     'slide_cabinet_close',
-    'open_cabinet', #! cupboard3 ready for demo gen ?? no such tasks?
-    'open_door',  # flow low quality, needs a kinect demo
-    'open_washing_machine', # no deom
-    'open_fridge', # demo done, exp not
-    'open_oven', # no demo
+    'open_washing_machine',
+    # 'open_trash_can', # ! no task
+    # 'open_cabinet', #! no task, demo ready
+    # 'close_cabinet', #! no task, demo ready
 
-    'close_door', 
   ]
   
   
