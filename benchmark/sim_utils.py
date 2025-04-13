@@ -41,49 +41,63 @@ from pyrep.objects.vision_sensor import VisionSensor
 # figure out how to parse target name??
 CAMERA_POSES = {
     "PickUpBottle":{
-        'camera_name': 'cam_front',
+        'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
         },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+    },
     "PickUpCup":{
-        'camera_name': 'cam_front',
+        'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
         },
     "PickUpMug":{
-        'camera_name': 'cam_front',
+        'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
         },
     "PickUpBowl":{
-        'camera_name': 'cam_front',
+        'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
         },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+        },
 
-    # "OpenDrawer":{
-    #     'camera_name': 'cam_over_shoulder_left',
-    #     'pos': [0.5, 1.6, 1.4],
-    #     'ori': [110, 0, 0]
-    # },
-
-    # "OpenMicrowave":{
-    #     'camera_name': 'cam_over_shoulder_right',
-    #     'pos': [0.2, -1.5, 1.2],
-    #     'ori': [-100, 0, 180]
-    # },
-    # "CloseDrawer":{
-    #     'camera_name': 'cam_over_shoulder_left',
-    #     'pos': [0.2, 1.6, 1.2],
-    #     'ori': [100, 0, 0]
-    # },
-    
-    # "CloseMicrowave":{
-    #     'camera_name': 'cam_over_shoulder_right',
-    #     'pos': [0.2, -1.5, 1.2],
-    #     'ori': [-100, 0, 180]
-    # },
-    # TEST
+        
     "OpenDrawer":{
         'cam_over_shoulder_left':{
             'pos': [0.5, 1.6, 1.4],
@@ -201,6 +215,34 @@ CAMERA_POSES = {
     },
 
     "OpenFridge":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+    "OpenCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+    "CloseCabinet":{
         'cam_over_shoulder_left':{
         'pos': [-1.0, 0.2, 1.7],
         'ori': [150, 67, -60]

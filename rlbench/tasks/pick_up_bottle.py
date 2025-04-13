@@ -11,10 +11,12 @@ from rlbench.backend.spawn_boundary import SpawnBoundary
 class PickUpBottle(Task):
 
     def init_task(self) -> None:
+        self.success_sensor = ProximitySensor('success')
+        self.success_sensor.set_position([0.52,0.2,0.7561])
         self.bottle1 = Shape('bottle')
         self.bottle1_visual = Shape('bottle_visual')
-        self.boundary = SpawnBoundary([Shape('boundary')]) # already defined in the scene
-        self.success_sensor = ProximitySensor('success')
+        # self.boundary = SpawnBoundary([Shape('boundary')]) # already defined in the scene
+        # self.success_sensor = ProximitySensor('success')
         self.register_graspable_objects([self.bottle1])
         self.register_success_conditions([
             DetectedCondition(self.bottle1, self.success_sensor, negated=True),
@@ -32,8 +34,8 @@ class PickUpBottle(Task):
 
         # self.bottle1_visual.set_color(target_rgb)
 
-        self.boundary.clear()
-        self.boundary.sample(self.success_sensor, min_distance=0.1)
+        # self.boundary.clear()
+        # self.boundary.sample(self.success_sensor, min_distance=0.1)
 
         return ['pick up the bottle',
                 'grasp the bottle and lift it',
@@ -42,9 +44,9 @@ class PickUpBottle(Task):
     def variation_count(self) -> int:
         return 1
     
-    def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
-        # return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
-        return [0, 0, 0], [0, 0, 0]
+    # def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
+    #     # return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
+    #     return [0, 0, 0], [0, 0, 0]
     
     def is_static_workspace(self) -> bool:
         return True

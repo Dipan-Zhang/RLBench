@@ -13,9 +13,10 @@ class PickUpMug(Task):
     def init_task(self) -> None:
         self.mug1 = Shape('mug1')
         self.mug1_visual = Shape('mug1_visual')
-        self.boundary = SpawnBoundary([Shape('boundary')]) # already defined in the scene
         self.success_sensor = ProximitySensor('success')
-        self.register_graspable_objects([self.mug1])
+        self.success_sensor.set_position([0.26, 0.2, 0.757])
+        
+        self.register_graspable_objects([self.mug1, self.mug1_visual])
         self.register_success_conditions([
             DetectedCondition(self.mug1, self.success_sensor, negated=True),
             GraspedCondition(self.robot.gripper, self.mug1),
@@ -32,9 +33,6 @@ class PickUpMug(Task):
 
         self.mug1_visual.set_color(target_rgb)
 
-        self.boundary.clear()
-        self.boundary.sample(self.success_sensor, min_distance=0.1)
-
         return ['pick up the %s mug' % target_color_name,
                 'grasp the %s mug and lift it' % target_color_name,
                 'lift the %s mug' % target_color_name]
@@ -45,5 +43,6 @@ class PickUpMug(Task):
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
         # return [0, 0, -3.14 / 8.], [0, 0, 3.14 / 8.]
         return [0, 0, 0], [0, 0, 0]
-    
 
+    def is_static_workspace(self) -> bool:
+        return True

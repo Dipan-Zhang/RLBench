@@ -15,7 +15,6 @@ class PickUpCup(Task):
         self.cup2 = Shape('cup2')
         self.cup1_visual = Shape('cup1_visual')
         self.cup2_visual = Shape('cup2_visual')
-        self.boundary = SpawnBoundary([Shape('boundary')]) # already defined in the scene
         self.success_sensor = ProximitySensor('success')
         self.register_graspable_objects([self.cup1, self.cup2])
         self.register_success_conditions([
@@ -35,9 +34,6 @@ class PickUpCup(Task):
         self.cup1_visual.set_color(target_rgb)
         self.cup2_visual.set_color(other1_rgb)
 
-        self.boundary.clear()
-        self.boundary.sample(self.cup2, min_distance=0.1)
-        self.boundary.sample(self.success_sensor, min_distance=0.1)
 
         return ['pick up the %s cup' % target_color_name,
                 'grasp the %s cup and lift it' % target_color_name,
