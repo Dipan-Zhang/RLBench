@@ -12,6 +12,8 @@ from rlbench.tasks.close_jar import CloseJar
 from rlbench.tasks.close_laptop_lid import CloseLaptopLid
 from rlbench.tasks.close_laptop import CloseLaptop
 from rlbench.tasks.close_microwave import CloseMicrowave
+from rlbench.tasks.close_cabinet import CloseCabinet
+from rlbench.tasks.close_slide_cabinet import CloseSlideCabinet
 from rlbench.tasks.empty_container import EmptyContainer
 from rlbench.tasks.empty_dishwasher import EmptyDishwasher
 from rlbench.tasks.get_ice_from_fridge import GetIceFromFridge
@@ -42,6 +44,7 @@ from rlbench.tasks.open_oven import OpenOven
 from rlbench.tasks.open_washing_machine import OpenWashingMachine
 from rlbench.tasks.open_window import OpenWindow
 from rlbench.tasks.open_wine_bottle import OpenWineBottle
+from rlbench.tasks.open_cabinet import OpenCabinet
 from rlbench.tasks.phone_on_base import PhoneOnBase
 from rlbench.tasks.pick_and_lift import PickAndLift
 from rlbench.tasks.pick_and_lift_small import PickAndLiftSmall
