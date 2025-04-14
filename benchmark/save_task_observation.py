@@ -80,7 +80,7 @@ def main(args, sim_cfg, task_list):
     obs_config=obs_config,
         headless=False)
     env.launch()
-    num_obs_per_task = args.obs_per_task
+    # num_obs_per_task = args.obs_per_task
 
     for task_name in task_list:
         print(f'Processing task: {task_name}')
@@ -103,15 +103,11 @@ def main(args, sim_cfg, task_list):
         for camera_name in PREDEFINED_CAMS.keys():
             save_base_dir = os.path.join(save_dir, task_name, 'obs', f'{camera_name}')
             os.makedirs(save_base_dir, exist_ok=True)
-
-            if task_name == 'PickUpCup' or task_name == 'PickUpBottle' or task_name == 'PickUpMug' or task_name == 'PickUpBowl' or task_name == 'PickUpKnife':
-                save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
-            else:
-                hide_robot_temporarily('Panda')
-                set_camera_pose(camera_name, PREDEFINED_CAMS[camera_name]['pos'], PREDEFINED_CAMS[camera_name]['ori'] ) # get overview of the workspace
-                obs = task.get_observation()
-                save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
-                restore_robot_position('Panda')
+            hide_robot_temporarily('Panda')
+            set_camera_pose(camera_name, PREDEFINED_CAMS[camera_name]['pos'], PREDEFINED_CAMS[camera_name]['ori'] ) # get overview of the workspace
+            obs = task.get_observation()
+            save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
+            restore_robot_position('Panda')
 
     print('Done')
     env.shutdown()
@@ -120,7 +116,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_name', type=str, default='pick_up_cup', help='task name')
-    parser.add_argument('--obs_per_task', type=int, default=1, help='number of observations per task')
+    # parser.add_argument('--obs_per_task', type=int, default=1, help='number of observations per task')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--save', type=bool, default=True, help='whether to save images')
     parser.add_argument('--DEBUG', action='store_true', default=False, help='debug mode')

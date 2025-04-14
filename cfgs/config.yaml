@@ -35,13 +35,12 @@ REAL_EXP_TASK_LIST:
 
 PORTABLE_TASK_LIST:
   [
-    'pick_up_cup', # done 
-    'pick_up_bottle', # done
-    'pick_up_mug', # done
-    'take_lid_off_saucepan', # no demo yet
-    'pick_up_bowl', # depth issue
-    # 'open_jar', # no demo
-    'water_plants', # no demo
+    'pick_up_cup', 
+    'pick_up_bottle',
+    'pick_up_mug',
+    'pick_up_bowl',
+    # 'take_lid_off_saucepan',
+    # 'water_plants',
   ]
 # each object state has to be different demo??? open and closed microwave for example, just stick with this for now 
 # how RAM solve this??? also 
@@ -53,18 +52,16 @@ ARTICULATE_TASK_LIST:
     'close_drawer',
     'open_microwave',
     'close_microwave',
+    'open_cabinet',
+    'close_cabinet',
     'open_dishwasher',
-    'open_fridge', 
 
     'close_laptop',
     'toilet_seat_down',
-    'slide_cabinet_open',
-    'slide_cabinet_close',
-    'open_washing_machine',
-    # 'open_trash_can', # ! no task
-    # 'open_cabinet', #! no task, demo ready
-    # 'close_cabinet', #! no task, demo ready
-
+    'open_slide_cabinet',
+    'close_slide_cabinet',
+    # 'open_fridge', 
+    # 'open_washing_machine',
   ]
   
   
