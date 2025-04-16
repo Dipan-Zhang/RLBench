@@ -71,7 +71,7 @@ def compute_DTM(gt_mask, corres, contour_sz, save_fp=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--trial', type=str, default='outputs/OpenMicrowave/ours/trial_2025-04-06_20-20/')
+    parser.add_argument('--trial_dir', type=str, default='outputs/OpenMicrowave/ours/trial_2025-04-06_20-20/')
     args = parser.parse_args()
     
 

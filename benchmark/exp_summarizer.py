@@ -252,7 +252,7 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate task performance using DTM and success rates")
-    parser.add_argument('-t', '--trial', type=str, required=True,
+    parser.add_argument('--trial_dir', type=str, required=True,
                        help="Path to the trial directory (e.g., outputs/OpenMicrowave/ours/trial_2023-11-01_12-30)")
     parser.add_argument('--skip-dtm', action='store_true', help="Skip DTM calculation (use existing data)")
     args = parser.parse_args()

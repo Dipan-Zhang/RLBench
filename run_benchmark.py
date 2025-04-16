@@ -10,7 +10,7 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--task', type=str, default='all', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='method name' )
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
-    parser.add_argument('--trial_name', type=str, help='batch eval using same trial name')
+    parser.add_argument('--trial_dir', type=str, help='batch eval using same trial name')
     parser.add_argument('--headless', action='store_true', help='run in headless mode')
     parser.add_argument('--summarize', action='store_true', help='run summarizer')
     args = parser.parse_args()
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         # # task_env, task_name = task.split("@")
         taskName = underscore_string_to_camel_case(task)
         trial_name = os.path.join('./outputs', taskName, method, args.trial_name)
-        cmd = f"python benchmark/test_affordance.py --task_name {task} --method {method} -t {trial_name}"
+        cmd = f"python benchmark/test_affordance.py --task_name {task} --method {method} --trial_dir {trial_name}"
         if (
             args.headless
         ):  # and task_name not in ["OpenDishwasher", "CloseDishwasher"]:
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
         if args.summarize:
             print(f"Running summarizer for {task}")
-            cmd = f"python benchmark/exp_summarizer.py -t {trial_name}"
+            cmd = f"python benchmark/exp_summarizer.py -trial_dir {trial_name}"
             os.system(cmd)
 
         print("=======================================================")
