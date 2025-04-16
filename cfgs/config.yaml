@@ -57,11 +57,10 @@ ARTICULATE_TASK_LIST:
     'open_dishwasher',
 
     'close_laptop',
-    'toilet_seat_down',
+    'down_toilet_seat',
     'open_slide_cabinet',
     'close_slide_cabinet',
     # 'open_fridge', 
     # 'open_washing_machine',
   ]
-  
   

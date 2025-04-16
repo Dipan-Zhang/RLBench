@@ -84,14 +84,15 @@ def main(args, sim_cfg, task_list):
 
     for task_name in task_list:
         print(f'Processing task: {task_name}')
+        taskName = underscore_string_to_camel_case(task_name)
         try:
             mod = importlib.import_module("rlbench.tasks")
             mod = importlib.reload(mod)
-            task_class = getattr(mod, task_name)
+            task_class = getattr(mod, taskName)
             task = env.get_task(task_class)
             obs = None
         except Exception as e:
-            print(f"Error processing task {task_name}: {str(e)}")
+            print(f"Error processing task {taskName}: {str(e)}")
             continue
         
         print('Reset Episode')
@@ -99,14 +100,14 @@ def main(args, sim_cfg, task_list):
         obs = task.get_observation()
         print('<===== Task description: ====>\n', descriptions)
         obj_name = descriptions[0].split(' ')[-1]
-        PREDEFINED_CAMS = CAMERA_POSES[task_name]
+        PREDEFINED_CAMS = CAMERA_POSES[taskName]
         for camera_name in PREDEFINED_CAMS.keys():
-            save_base_dir = os.path.join(save_dir, task_name, 'obs', f'{camera_name}')
+            save_base_dir = os.path.join(save_dir, taskName, 'obs', f'{camera_name}')
             os.makedirs(save_base_dir, exist_ok=True)
             hide_robot_temporarily('Panda')
             set_camera_pose(camera_name, PREDEFINED_CAMS[camera_name]['pos'], PREDEFINED_CAMS[camera_name]['ori'] ) # get overview of the workspace
             obs = task.get_observation()
-            save_observation(obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
+            save_observation(obs, cam_name=camera_name, task_name=taskName, object_name=obj_name, save_dir=save_base_dir)
             restore_robot_position('Panda')
 
     print('Done')
@@ -126,18 +127,18 @@ if __name__ == '__main__':
 
     sim_cfg_fp = args.sim_config_fp
     sim_cfg = OmegaConf.load(sim_cfg_fp)
+    PORTABLE_TASK_LIST = sim_cfg['PORTABLE_TASK_LIST']
+    ARTICULATE_TASK_LIST = sim_cfg['ARTICULATE_TASK_LIST']
+
     if args.task_name == 'all':
-        # task_list = ['PickUpCup', 'PickUpBottle', 'PickUpMug', 'PickUpBowl', 'PickUpKnife']
-        # task_list = ['OpenDrawerFixed', 'OpenMicrowave']
-        task_list = list(CAMERA_POSES.keys())
         # TODO: finish the camera poses for all tasks
-        # task_list = sim_cfg['PORTABLE_TASK_LIST'] + sim_cfg['ARTICULATE_TASK_LIST']
+        task_list = PORTABLE_TASK_LIST + ARTICULATE_TASK_LIST
     elif args.task_name == 'portable':
-        task_list = [underscore_string_to_camel_case(x) for x in sim_cfg['PORTABLE_TASK_LIST']]
+        task_list = PORTABLE_TASK_LIST
     elif args.task_name == 'articulate':
-        task_list = [underscore_string_to_camel_case(x) for x in sim_cfg['ARTICULATE_TASK_LIST']]
+        task_list = ARTICULATE_TASK_LIST
     else:
-        task_list = [underscore_string_to_camel_case(args.task_name)]
+        task_list = [args.task_name]
     
     main(args, sim_cfg, task_list)
 
