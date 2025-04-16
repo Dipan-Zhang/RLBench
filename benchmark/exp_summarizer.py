@@ -186,7 +186,7 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
             success_values = success_data[camera]
             camera_report['Success']['values'] = success_values
             camera_report['Success']['mean'] = np.mean(success_values)
-            camera_report['Success']['std'] = np.std(success_values)
+            # camera_report['Success']['std'] = np.std(success_values)
         
         combined_report[camera] = camera_report
     
@@ -207,7 +207,7 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
         },
         'Success': {
             'mean': np.mean(all_successes) if all_successes else None, 
-            'std': np.std(all_successes) if all_successes else None
+            # 'std': np.std(all_successes) if all_successes else None
         }
     }
     
@@ -226,7 +226,7 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
             
             if 'Success' in combined_report[camera] and 'mean' in combined_report[camera]['Success']:
                 row['Success_rate'] = combined_report[camera]['Success']['mean']
-                row['Success_std'] = combined_report[camera]['Success']['std']
+                # row['Success_std'] = combined_report[camera]['Success']['std']
         else:
             # Handle the aggregated metrics
             if 'DTM' in combined_report[camera] and 'mean' in combined_report[camera]['DTM']:
@@ -235,7 +235,7 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
             
             if 'Success' in combined_report[camera] and 'mean' in combined_report[camera]['Success']:
                 row['Success_rate'] = combined_report[camera]['Success']['mean']
-                row['Success_std'] = combined_report[camera]['Success']['std']
+                # row['Success_std'] = combined_report[camera]['Success']['std']
         
         summary_data.append(row)
     
