@@ -22,7 +22,8 @@ from benchmark.helpers import (
                         load_pickle,
                         save_pickle,
                         visualize_motion_plan,
-                        apply_motion_plan
+                        apply_motion_plan,
+                        underscore_string_to_camel_case
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 from scipy.spatial.transform import Rotation as Rot
@@ -36,8 +37,7 @@ import importlib
 import os
 import pandas as pd
 from typing import List, Tuple
-import gc
-import pickle
+
 
 def transform_motion_plan(motion_plan, T_cam_obj):
     """
@@ -159,7 +159,7 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
     for i in range(len(post_gripper_matrices)):
         post_gripper_pose = post_gripper_matrices[i]
         post_gripper_rotation = Rot.from_matrix(post_gripper_pose[:3, :3])
-        post_gripper_translation = post_gripper_pose[:3, 3]
+        post_gripper_translation = post_gripper_pose[:3, 3] 
         post_gripper_poses.append(np.concatenate([post_gripper_translation, post_gripper_rotation.as_quat()]))
         
     # vis unsmooothed trajectory
@@ -263,11 +263,12 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
 
 def main(args, sim_cfg):
     DEBUG_VIS = args.DEBUG_VIS
-    task_name = args.task_name # TODO make this using underscore_string_to_camel_case
+    task_name = args.task_name 
+    taskName = underscore_string_to_camel_case(task_name)
     method = args.method
     SAVE_ROOT = args.trial_dir
     assert method in args.trial_dir, 'trial_dir conflicts with method name'
-    assert task_name in args.trial_dir, 'trial_dir conflicts with task name'
+    assert taskName in args.trial_dir, 'trial_dir conflicts with task name'
 
     trial_name = SAVE_ROOT.split('/')[-1]
     # set up env
@@ -276,7 +277,10 @@ def main(args, sim_cfg):
     obs_config = create_obs_config(cameras, camera_resolution, method_name="")
     env = Environment(
         action_mode=MoveArmThenGripper(
-            arm_action_mode=EndEffectorPoseViaPlanning(absolute_mode=True, collision_checking=False), 
+            arm_action_mode=EndEffectorPoseViaPlanning(
+                absolute_mode=True,
+                collision_checking=False
+                ), 
             gripper_action_mode=Discrete()
             ),
         obs_config=obs_config,
@@ -286,14 +290,14 @@ def main(args, sim_cfg):
 
     mod = importlib.import_module("rlbench.tasks")
     mod = importlib.reload(mod)
-    task_class = getattr(mod, args.task_name)
+    task_class = getattr(mod, taskName)
     task = env.get_task(task_class)
     obs = None
 
     # load affordance
     if method == 'RAM':
         traj_fn = os.path.join(SAVE_ROOT, 'retrieved_motion_all.pkl')
-        traj_data = pickle.load(open(traj_fn, 'rb'))
+        traj_data = load_pickle(traj_fn)
         camera_names = list(traj_data.keys())
         num_trial = len(traj_data[camera_names[0]].keys())
     elif method == 'ours':
@@ -304,7 +308,6 @@ def main(args, sim_cfg):
     else:
         raise ValueError('Invalid affordance method name')
     
-    # num_trial = 1 #! TEMP FIX for testing ours 
 
     exp_results_all = {}
     for camera in camera_names:
@@ -313,12 +316,12 @@ def main(args, sim_cfg):
             print(f'Camera {camera}, Episode {i}')
             if args.save_video:
                 image_save_dir = "./outputs/{}/exp_results/{}/{}/video_{}/obs_{}/trial_{}".format(
-                    task_name, method, trial_name, args.video_camera, camera, i
+                    taskName, method, trial_name, args.video_camera, camera, i
                 )
                 os.makedirs(image_save_dir, exist_ok=True)
                 frame_idx = 0  # to number frames
 
-            PREDEFINED_CAM = CAMERA_POSES[task_name]
+            PREDEFINED_CAM = CAMERA_POSES[taskName]
             set_camera_pose(camera, PREDEFINED_CAM[camera]['pos'], PREDEFINED_CAM[camera]['ori'] )
             
             # smoothen the trajectory
@@ -380,7 +383,7 @@ def main(args, sim_cfg):
                 try:
                     obs, reward, terminate = task.step(action)
                 except InvalidActionError as e:
-                    print(f"Invalid action: {e}, cancel this trial")
+                    print(f"Invalid action: {e} \n Cancel this trial")
                     break
                 trajectory_idx+=1
                 if args.save_video:
@@ -448,7 +451,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     # parser.add_argument('--camera', type=str, default='cam_front', help='camera for affordance transfer')
-    parser.add_argument('--task_name', type=str, default='PickUpCup', help='task name')
+    parser.add_argument('-t', '--task_name', type=str, default='pick_up_bottle', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
@@ -466,20 +469,15 @@ if __name__ == '__main__':
     main(args, sim_cfg)
 
 # Portable 
-# python benchmark/test_affordance.py --task_name PickUpCup --method ours --DEBUG_VIS 
-# python benchmark/test_affordance.py --task_name PickUpBottle --method ours  --DEBUG_VIS 
-# python benchmark/test_affordance.py --task_name PickUpMug --method ours  --DEBUG_VIS 
-# python benchmark/test_affordance.py --task_name PickUpBowl --method ours  --DEBUG_VIS 
+# python benchmark/test_affordance.py --task_name pick_up_bottle --method ours --DEBUG_VIS 
 
 # Articulate
-# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours --save_video True --video_camera left_shoulder
-# python benchmark/test_affordance.py --task_name OpenMicrowave --method ours  --DEBUG_VIS
+# python benchmark/test_affordance.py --task_name open_microwave --method ours --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name # python benchmark/test_affordance.py --task_name open_microwave --method ours --save_video True --video_camera left_shoulder --method ours  --DEBUG_VIS
 
-# python benchmark/test_affordance.py --task_name CloseMicrowave --method ours --save_video True --video_camera left_shoulder
-
-
-
+# python benchmark/test_affordance.py --task_name close_microwave --method ours --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name close_cabinet --method ours -t /home/stud/zanr/code/RLBench/outputs/CloseCabinet/ours/trial_2025-04-15_12-00
 
 # RAM 
-# python benchmark/test_affordance.py --task_name OpenDrawer --method RAM --save_video True --video_camera left_shoulder
-# python benchmark/test_affordance.py --task_name OpenMicrowave --method RAM --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name open_drawer --method RAM --save_video True --video_camera left_shoulder
+# python benchmark/test_affordance.py --task_name open_microwave --method RAM --save_video True --video_camera left_shoulder
