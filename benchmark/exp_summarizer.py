@@ -258,20 +258,20 @@ def main():
     args = parser.parse_args()
     
     # Validate trial path
-    if not os.path.exists(args.trial):
-        print(f"Error: Trial directory {args.trial} does not exist.")
+    if not os.path.exists(args.trial_dir):
+        print(f"Error: Trial directory {args.trial_dir} does not exist.")
         return
     
-    print(f"Evaluating performance for trial: {args.trial}")
+    print(f"Evaluating performance for trial: {args.trial_dir}")
     
     # Calculate DTM if needed
     dtm_data = {}
     if not args.skip_dtm:
         print("Calculating DTM metrics...")
-        dtm_data = calculate_dtm_metrics(args.trial)
+        dtm_data = calculate_dtm_metrics(args.trial_dir)
     else:
         # Try to load existing DTM data
-        dtm_path = os.path.join(args.trial, 'evaluation_results', 'combined_metrics.pkl')
+        dtm_path = os.path.join(args.trial_dir, 'evaluation_results', 'combined_metrics.pkl')
         if os.path.exists(dtm_path):
             combined_data = load_pickle(dtm_path)
             dtm_data = {k: v.get('DTM', {}).get('values', []) for k, v in combined_data.items() 
@@ -282,11 +282,11 @@ def main():
     
     # Load success rates
     print("Loading success rates...")
-    success_data = load_success_rates(args.trial)
+    success_data = load_success_rates(args.trial_dir)
     
     # Generate combined report
     print("Generating combined report...")
-    combine_metrics_report(args.trial, dtm_data, success_data)
+    combine_metrics_report(args.trial_dir, dtm_data, success_data)
 
 if __name__ == '__main__':
     main()
