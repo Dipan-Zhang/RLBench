@@ -360,7 +360,16 @@ def main(args, sim_cfg):
 
                 post_grasp_dir = traj_data[camera][i]['post_grasp_dir']
                 post_grasp_dir = np.array(post_grasp_dir)
-
+                # conver grasp_dir to world frame
+                cam_key = convert_camera_name(camera)
+                T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
+                # converting coppliaSIM camera convention to OpenGL
+                R_z_180 = np.array(
+                    [[ -1,  0,  0],
+                    [  0, -1,  0],
+                    [  0,  0,  1]])
+                T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
+                post_grasp_dir = T_world_cam[:3, :3] @ post_grasp_dir
                 post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
 
             task.move_to_grasp()
