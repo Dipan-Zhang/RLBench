@@ -5,7 +5,8 @@ import argparse
 import pandas as pd
 import cv2
 import matplotlib.pyplot as plt
-from datetime import datetime
+from omegaconf import OmegaConf
+from benchmark.helpers import underscore_string_to_camel_case
 
 def load_pickle(pickle_file):
     try:
@@ -247,31 +248,39 @@ def combine_metrics_report(trial_path, dtm_data, success_data):
     print("\n===== Performance Evaluation Summary =====")
     print(summary_df)
     print(f"\nFull results saved to {results_dir}")
+    all_camera_SR_mean = None
+    all_camera_DTM_mean = None
     
-    return summary_df
+    if summary_df.shape[0]<3:
+        print("Warning: Summary DataFrame is empty. No metrics to report.")
+    else:
+        all_camera_row = summary_df[summary_df['Camera'] == 'all_cameras']
+        if len(all_camera_row) > 0:
+            if 'Success_rate' in all_camera_row.columns:
+                all_camera_SR_mean = all_camera_row['Success_rate'].values[0]
+            if 'DTM_mean' in all_camera_row.columns:
+                all_camera_DTM_mean = all_camera_row['DTM_mean'].values[0]
+        else:
+            print("Warning: No aggregate 'all_cameras' metrics found in summary.")
+    
+    return all_camera_SR_mean, all_camera_DTM_mean
 
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate task performance using DTM and success rates")
-    parser.add_argument('--trial_dir', type=str, required=True,
-                       help="Path to the trial directory (e.g., outputs/OpenMicrowave/ours/trial_2023-11-01_12-30)")
-    parser.add_argument('--skip-dtm', action='store_true', help="Skip DTM calculation (use existing data)")
-    args = parser.parse_args()
-    
+def summarize_single(trial_dir):
     # Validate trial path
-    if not os.path.exists(args.trial_dir):
-        print(f"Error: Trial directory {args.trial_dir} does not exist.")
-        return
+    if not os.path.exists(trial_dir):
+        print(f"Error: Trial directory {trial_dir} does not exist.")
+        return None, None
     
-    print(f"Evaluating performance for trial: {args.trial_dir}")
+    print(f"Evaluating performance for trial: {trial_dir}")
     
     # Calculate DTM if needed
     dtm_data = {}
     if not args.skip_dtm:
         print("Calculating DTM metrics...")
-        dtm_data = calculate_dtm_metrics(args.trial_dir)
+        dtm_data = calculate_dtm_metrics(trial_dir)
     else:
         # Try to load existing DTM data
-        dtm_path = os.path.join(args.trial_dir, 'evaluation_results', 'combined_metrics.pkl')
+        dtm_path = os.path.join(trial_dir, 'evaluation_results', 'combined_metrics.pkl')
         if os.path.exists(dtm_path):
             combined_data = load_pickle(dtm_path)
             dtm_data = {k: v.get('DTM', {}).get('values', []) for k, v in combined_data.items() 
@@ -282,11 +291,55 @@ def main():
     
     # Load success rates
     print("Loading success rates...")
-    success_data = load_success_rates(args.trial_dir)
+    success_data = load_success_rates(trial_dir)
     
     # Generate combined report
     print("Generating combined report...")
-    combine_metrics_report(args.trial_dir, dtm_data, success_data)
+    return combine_metrics_report(trial_dir, dtm_data, success_data)
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-t', '--task', type=str, default='all', help='task name')
+    parser.add_argument('--method', type=str, default='ours', help='method name' )
+    parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
+    parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
+    parser.add_argument('--skip-dtm', action='store_true', help="Skip DTM calculation (use existing data)")
+    args = parser.parse_args()
+
+    method = args.method
+    sim_cfg_fp = args.sim_config_fp
+    sim_cfg = OmegaConf.load(sim_cfg_fp)
+    TASK_LIST_PORTABLE = sim_cfg['PORTABLE_TASK_LIST']
+    TASK_LIST_ARTICULATE = sim_cfg['ARTICULATE_TASK_LIST']
+
+    if args.task == 'all':
+        TASKS = TASK_LIST_PORTABLE + TASK_LIST_ARTICULATE
+    elif args.task == 'portable':
+        TASKS = TASK_LIST_PORTABLE
+    elif args.task == 'articulate':
+        TASKS = TASK_LIST_ARTICULATE
+    else:
+        TASKS = [args.task]
+
+    benchmark_results = {}
+    for task in TASKS:
+        print(f"====================Task: {task}=====================")
+        taskName = underscore_string_to_camel_case(task)
+        trial_dir = os.path.join('./outputs', taskName, method, args.trial_dir)
+        task_SR_mean, task_DTM_mean = summarize_single(trial_dir)
+        benchmark_results[taskName] = {
+            'SR_mean': task_SR_mean,
+            'DTM_mean': task_DTM_mean
+        }
+
+        print("=======================================================")
+    
+    # save the average success rate for all tasks
+    benchmark_results_dir = os.path.join('./outputs', 'benchmark_result')
+    os.makedirs(benchmark_results_dir, exist_ok=True)
+    benchmark_results_fp = os.path.join(benchmark_results_dir, f'{method}_{args.trial_dir}.csv')
+    benchmark_results_df = pd.DataFrame(benchmark_results)
+    benchmark_results_df.to_csv(benchmark_results_fp, index=False)
+    print(f"All tasks average success rate saved to {benchmark_results_fp}")
+    print("Done")

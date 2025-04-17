@@ -12,7 +12,8 @@ if __name__ == "__main__":
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
     parser.add_argument('--headless', action='store_true', help='run in headless mode')
-    parser.add_argument('--summarize', action='store_true', help='run summarizer')
+    parser.add_argument('--DEBUG_VIS', action='store_true', help='visualize the motion in rlbench')
+
     args = parser.parse_args()
 
     method = args.method
@@ -27,6 +28,8 @@ if __name__ == "__main__":
         TASKS = TASK_LIST_PORTABLE
     elif args.task == 'articulate':
         TASKS = TASK_LIST_ARTICULATE
+    elif args.task == 'rest':
+        TASKS = ['open_cabinet', 'close_cabinet', 'open_dishwasher']
     else:
         TASKS = [args.task]
 
@@ -36,15 +39,10 @@ if __name__ == "__main__":
         taskName = underscore_string_to_camel_case(task)
         trial_dir = os.path.join('./outputs', taskName, method, args.trial_dir)
         cmd = f"python benchmark/test_affordance.py --task_name {task} --method {method} --trial_dir {trial_dir}"
-        if (
-            args.headless
-        ):  # and task_name not in ["OpenDishwasher", "CloseDishwasher"]:
+        if args.headless:
             cmd += " --headless"
+        if args.DEBUG_VIS:
+            cmd += " --DEBUG_VIS"
         os.system(cmd)
-
-        if args.summarize:
-            print(f"Running summarizer for {task}")
-            cmd = f"python benchmark/exp_summarizer.py --trial_dir {trial_dir}"
-            os.system(cmd)
 
         print("=======================================================")
