@@ -314,7 +314,7 @@ if __name__ == '__main__':
     TASK_LIST_ARTICULATE = sim_cfg['ARTICULATE_TASK_LIST']
 
     if args.task == 'all':
-        TASKS = TASK_LIST_PORTABLE + TASK_LIST_ARTICULATE
+        TASKS = TASK_LIST_ARTICULATE + TASK_LIST_PORTABLE
     elif args.task == 'portable':
         TASKS = TASK_LIST_PORTABLE
     elif args.task == 'articulate':
@@ -328,12 +328,13 @@ if __name__ == '__main__':
         taskName = underscore_string_to_camel_case(task)
         trial_dir = os.path.join('./outputs', taskName, method, args.trial_dir)
         task_SR_mean, task_DTM_mean = summarize_single(trial_dir)
-        benchmark_results[taskName] = {
-            'SR_mean': task_SR_mean,
+
+        SR_mean = task_SR_mean*100 if task_SR_mean is not None else None
+        benchmark_results[task] = {
+            'SR_mean': SR_mean,
             'DTM_mean': task_DTM_mean
         }
 
-        print("=======================================================")
     
     # save the average success rate for all tasks
     benchmark_results_dir = os.path.join('./outputs', 'benchmark_result')
