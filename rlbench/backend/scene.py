@@ -540,7 +540,8 @@ class Scene(object):
                             while not done:
                                 gripper_open = 0.0
                                 done = gripper.actuate(gripper_open, 0.04)
-                                gripper.grasp(self.task.get_graspable_objects()[0]) # HOTFIX add first object
+                                if len(self.task.get_graspable_objects()) > 0:
+                                    gripper.grasp(self.task.get_graspable_objects()[0]) # HOTFIX add first object
                                 self.step()
                                 self._joint_position_action = np.append(path.get_executed_joint_position_action(), gripper_open)
                                     

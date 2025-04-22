@@ -28,8 +28,8 @@ if __name__ == "__main__":
         TASKS = TASK_LIST_PORTABLE
     elif args.task == 'articulate':
         TASKS = TASK_LIST_ARTICULATE
-    elif args.task == 'rest':
-        TASKS = ['open_cabinet', 'close_cabinet', 'open_dishwasher']
+    elif args.task == 'flex':
+        TASKS = ['close_cabinet', 'close_laptop', 'open_dishwasher', 'down_toilet_seat', 'open_']
     else:
         TASKS = [args.task]
 
