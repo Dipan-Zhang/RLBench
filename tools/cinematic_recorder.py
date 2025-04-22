@@ -18,13 +18,23 @@ from rlbench.observation_config import ObservationConfig
 from rlbench.sim2real.domain_randomization import RandomizeEvery, \
     VisualRandomizationConfig
 
+# load sim config
+from omegaconf import OmegaConf
+sim_cfg_fp = './cfgs/config.yaml'
+sim_cfg = OmegaConf.load(sim_cfg_fp)
+TASK_LIST_PORTABLE = list(sim_cfg['PORTABLE_TASK_LIST'])
+TASK_LIST_ARTICULATE = list(sim_cfg['ARTICULATE_TASK_LIST'])
+TASK_LIST = TASK_LIST_PORTABLE + TASK_LIST_ARTICULATE
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    'save_dir', '/tmp/rlbench_videos/',
+    'save_dir', './outputs/rlbench_videos/',
     'Where to save the generated videos.')
+# flags.DEFINE_list(
+#     'tasks', [], 'The tasks to record. If empty, all tasks are recorded.')
 flags.DEFINE_list(
-    'tasks', [], 'The tasks to record. If empty, all tasks are recorded.')
+    'tasks', TASK_LIST, 'The tasks to record. If empty, all tasks are recorded.')
 flags.DEFINE_boolean(
     'individual', True, 'One long clip of all the tasks, or individual videos.')
 flags.DEFINE_boolean(
