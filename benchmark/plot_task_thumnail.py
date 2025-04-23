@@ -51,6 +51,6 @@ thumbnail_path = os.path.join(videos_dir, 'task_thumbnail.png')
 cv2.imwrite(thumbnail_path, grid)
 
 # save the grid in a slight smaller size
-thumbnail_path = os.path.join(videos_dir, 'task_thumbnail_small.png')
+thumbnail_path = os.path.join(videos_dir, 'task_thumbnail_small.jpg')
 thumbnail = cv2.resize(grid, (grid_width//3, grid_height//3))
 cv2.imwrite(thumbnail_path, thumbnail)
