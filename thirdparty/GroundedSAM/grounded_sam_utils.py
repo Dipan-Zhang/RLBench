@@ -216,12 +216,14 @@ def prepare_GroundedSAM_for_inference(sam_version, sam_checkpoint, grounded_chec
     return model, predictor
 
 
-def prepare_gsam_model(device):
+def prepare_gsam_model(device, use_sam_hq=False):
     # download from GroundedSAM
-    # sam_version = "vit_h"
-    # sam_checkpoint = "../../data+ckpt/ckpts/sam_vit_h_4b8939.pth"
-    sam_version = "vit_b"
-    sam_checkpoint = "../../data+ckpt/ckpts/sam_vit_b_01ec64.pth"
+    if use_sam_hq:
+        sam_version = "vit_h"
+        sam_checkpoint = "../../data+ckpt/ckpts/sam_vit_h_4b8939.pth"
+    else:
+        sam_version = "vit_b"
+        sam_checkpoint = "../../data+ckpt/ckpts/sam_vit_b_01ec64.pth"
     grounded_checkpoint = "../../data+ckpt/ckpts/groundingdino_swint_ogc.pth"
     config = "thirdparty/GroundedSAM/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
 

@@ -220,10 +220,11 @@ def preprocess_target_data(tgt_rgb, tgt_depth, cam_K, dataset, obj_name:str):
     """
     if dataset == 'kinect':
         assert obj_name is not None, "Please provide a text object name for SAM"
+        text_prompt = obj_name
         from thirdparty.GroundedSAM.grounded_sam_utils import prepare_gsam_model, inference_one_image
-        grounded_dino_model, sam_predictor = prepare_gsam_model(device='cuda')
+        grounded_dino_model, sam_predictor = prepare_gsam_model(device='cuda',use_sam_hq=True)
         tgt_masks = inference_one_image(tgt_rgb, grounded_dino_model, sam_predictor,\
-                                    box_threshold=0.3, text_threshold=0.25, text_prompt=obj_name,\
+                                    box_threshold=0.3, text_threshold=0.25, text_prompt=text_prompt,\
                                     device="cuda").cpu().numpy() # you can set point_prompt to traj[0]
     
     
