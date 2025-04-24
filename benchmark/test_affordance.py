@@ -23,7 +23,7 @@ from benchmark.helpers import (
                         save_pickle,
                         visualize_motion_plan,
                         apply_motion_plan,
-                        underscore_string_to_camel_case
+                        underscore_string_to_camel_case,
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 from scipy.spatial.transform import Rotation as Rot
@@ -32,7 +32,8 @@ from scipy.spatial.transform import Slerp
 from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
-          adjust_camera_pose, set_camera_pose, CAMERA_POSES
+          adjust_camera_pose, set_camera_pose, CAMERA_POSES, get_T_world_cam_gl, \
+          get_pcd_with_color
 import importlib
 import os
 import pandas as pd
@@ -65,14 +66,14 @@ def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
     # Generate a post-grasp trajectory
     post_grasp_trajectory = []
     for i in range(10):
-        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.04)
+        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.03)
 
         post_grasp_trajectory.append(t)
     return np.array(post_grasp_trajectory)
 
 def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
     "plan smooth gripper trajectory based on affordance trajectory"
-    current_gripper_pose =obs.gripper_pose[:7]
+    current_gripper_pose = obs.gripper_pose[:7]
     offset = affordance_traj_world[0] - current_gripper_pose[:3]
     affordance_traj_world -= offset
     affordance_traj_world = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world], axis=0)
@@ -84,20 +85,25 @@ def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
     post_gripper_poses = np.concatenate([post_gripper_poses, np.zeros((affordance_traj_world.shape[0], 1))], axis=1)
     
     # add noise to avoid devide by zero
-    noise = np.random.normal(0, 0.005, post_gripper_poses.shape)
+    noise = np.random.normal(0, 1e-4, post_gripper_poses.shape)
     post_gripper_poses[:, :3] += noise[:, :3]
-    actions =  post_gripper_poses
+    actions = post_gripper_poses
 
     if vis:
-        # ipdb.set_trace()
+        # world frame pcd
         current_pts = obs.left_shoulder_point_cloud
         current_pcd = visualize_points(current_pts.reshape(-1, 3))
+
+        # camera_name = 'cam_over_shoulder_left'
+        # current_pcd = get_pcd_with_color(obs, camera_name)
+        # T_world_cam = get_T_world_cam_gl(obs, camera_name)
+        # current_pcd.transform(T_world_cam)
+
         action_vis = []
         for i in range(len(actions)):
             action_vis.append(vis_pose(actions[i][:3], Rot.from_quat(actions[i][3:7]).as_matrix()))
         world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
         plan_trajectory = visualize_3d_trajectory(affordance_traj_world, size=0.02, cmap_name="plasma", invert=False)
-        # best_grasp_world_vis = best_grasp_world.to_open3d_geometry()
         o3d.visualization.draw_geometries(action_vis + plan_trajectory + [current_pcd ,world])
     return actions
 
@@ -245,7 +251,6 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
     print(f'Generated {len(actions)} action steps from motion plan')
     
     if vis:
-        # Visualization code remains the same
         current_pts = obs.left_shoulder_point_cloud
         current_pcd = visualize_points(current_pts.reshape(-1, 3))
         action_vis = []
@@ -305,6 +310,16 @@ def main(args, sim_cfg):
         motion_data = load_pickle(motion_data_fp)
         camera_names = list(motion_data.keys())
         num_trial = len(motion_data[camera_names[0]].keys())
+    elif method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
+        camera_names = ['cam_overhead', 'cam_over_shoulder_left', 'cam_over_shoulder_right']
+        num_trial = 5
+        trajs_dict = {}
+        for camera in camera_names:
+            traj_fn = os.path.join(SAVE_ROOT, camera, f'traj_{method}_000000.npz')
+            trajs_data = np.load(traj_fn, allow_pickle=True)
+            trajs = trajs_data['pred_trajs']
+            trajs_dict[camera] = trajs
+
     else:
         raise ValueError('Invalid affordance method name')
     
@@ -335,20 +350,9 @@ def main(args, sim_cfg):
             if method == 'ours':
                 motion_plan_c2 = motion_data[camera][i]['motion_plan']
                 # convert the motion plan from c2 to world frame
-                cam_key = convert_camera_name(camera)
-                T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
-
-                # converting coppliaSIM camera convention to OpenGL
-                R_z_180 = np.array(
-                    [[ -1,  0,  0],
-                    [  0, -1,  0],
-                    [  0,  0,  1]])
-                T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
+                T_world_cam = get_T_world_cam_gl(obs, camera)
                 motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
-                # ipdb.set_trace()
-                # print(obs.gripper_pose[:3])
-                # pcd = visualize_points(obs.left_shoulder_point_cloud.reshape(-1, 3))
-                # o3d.visualization.draw([pcd] + visualize_motion_plan(np.array([ 0.27845454, -0.00815381,  1.47199416]), motion_plan_world))
+
             elif method == 'RAM':
                 grasp_array = traj_data[camera][i]['grasp_array']
                 grasp_array = np.array(grasp_array)
@@ -361,16 +365,15 @@ def main(args, sim_cfg):
                 post_grasp_dir = traj_data[camera][i]['post_grasp_dir']
                 post_grasp_dir = np.array(post_grasp_dir)
                 # conver grasp_dir to world frame
-                cam_key = convert_camera_name(camera)
-                T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
-                # converting coppliaSIM camera convention to OpenGL
-                R_z_180 = np.array(
-                    [[ -1,  0,  0],
-                    [  0, -1,  0],
-                    [  0,  0,  1]])
-                T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
+                T_world_cam = get_T_world_cam_gl(obs, camera)
                 post_grasp_dir = T_world_cam[:3, :3] @ post_grasp_dir
                 post_grasp_trajectory = generate_postgrasp_trajectory(grasp_T, post_grasp_dir)
+            
+            elif method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
+                T_world_cam = get_T_world_cam_gl(obs, camera)
+                trajs = trajs_dict[camera]
+                traj_c2 = trajs[i]
+                traj_world = traj_c2 @ T_world_cam[:3, :3].T + T_world_cam[:3, 3]
 
             task.move_to_grasp()
             obs = task.get_observation()
@@ -379,13 +382,15 @@ def main(args, sim_cfg):
                 save_frame(frame_idx, args.video_camera, obs, image_save_dir)
                 frame_idx += 1
             # get new obs and plan actions
-            # ipdb.set_trace()
             if method == 'ours':
                 actions = plan_motion_plan(obs, motion_plan_world, vis=DEBUG_VIS)
             elif method == 'RAM':
                 actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=DEBUG_VIS)
-                
-            episode_length = 20
+            elif method == 'gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
+                actions = plan_gripper_trajectory(obs, traj_world, vis=DEBUG_VIS)
+
+
+            episode_length = len(actions)+5
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
@@ -423,7 +428,7 @@ def main(args, sim_cfg):
                 )
                 os.system(cmd)
         if not args.no_save_result:
-            # Save the observation
+            # Save the results
             save_fn = os.path.join(SAVE_ROOT, camera, 'exp_result.csv')
             to_write = {
                 "camera_name": camera,
@@ -432,7 +437,6 @@ def main(args, sim_cfg):
             }
             df = pd.DataFrame(to_write)
             df = df.to_csv(save_fn, mode="w", index=None)
-        
         exp_results_all[camera] = result_list
     
     exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
@@ -462,10 +466,10 @@ if __name__ == '__main__':
     # parser.add_argument('--camera', type=str, default='cam_front', help='camera for affordance transfer')
     parser.add_argument('-t', '--task_name', type=str, default='pick_up_bottle', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
+    parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
-    parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
     parser.add_argument('--DEBUG_VIS', action='store_true')
