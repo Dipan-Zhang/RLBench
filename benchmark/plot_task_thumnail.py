@@ -27,9 +27,17 @@ for video_file in tqdm(video_files):
             break
     # append the 10th frame to the list
     frames.append(frame)
-    # release the video capture object
+    # add caption of task name
+    task_name = video_file.split('.')[0]
+    task_name = task_name.replace('_', ' ')
+    height, width = frame.shape[:2]
+    text_size = cv2.getTextSize(task_name, cv2.FONT_HERSHEY_TRIPLEX, 3, 2)[0]
+    text_x = (width - text_size[0]) // 2
+    text_y = height - 25
+    cv2.putText(frame, task_name, (text_x, text_y), cv2.FONT_HERSHEY_TRIPLEX, 3, (255, 255, 255), 4)
     cap.release()
-# create a grid of frames   
+
+# create a grid of frames
 num_frames = len(frames)
 num_cols = 3
 num_rows = (num_frames + num_cols - 1) // num_cols
