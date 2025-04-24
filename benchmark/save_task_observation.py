@@ -12,6 +12,7 @@ from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, EndEffectorPoseViaIK
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
+from tqdm import tqdm
 
 from benchmark.helpers import (
                         visualize_points,
@@ -44,9 +45,11 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     cam_K[1, 1] = np.abs(cam_K[1,1])
     T_world_cam = obs.misc[key_name+'_extrinsics'].copy()
 
-
-    task_rgb_save_fn = os.path.join(save_dir, 'rgb.png')
+    task_rgb_save_fn = os.path.join(save_dir, 'color_000000.png')
     cv2.imwrite(task_rgb_save_fn, rgb[:,:,::-1])
+
+    task_depth_save_fn = os.path.join(save_dir, 'depth_000000.png')
+    cv2.imwrite(task_depth_save_fn, (depth*1000).astype(np.uint16))
 
     pointcloud_save_fn = os.path.join(save_dir, 'pcd.ply')
     pcd = o3d.geometry.PointCloud()
@@ -57,6 +60,13 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     task_data['pointcloud'] = pointcloud_reshaped
     task_data['T_world_cam'] = T_world_cam
     
+    # save mask
+    object_mask = task_data['mask']
+    object_mask = (object_mask * 255).astype(np.uint8)
+    mask_save_fn = os.path.join(save_dir, 'mask_000000.png')
+    cv2.imwrite(mask_save_fn, object_mask)
+    
+    # save the task data
     task_data_save_fn = os.path.join(save_dir, 'task_data.npz')
     np.savez(task_data_save_fn, **task_data)
     print(f'saved observation to {save_dir}')
@@ -77,12 +87,12 @@ def main(args, sim_cfg, task_list):
             arm_action_mode=EndEffectorPoseViaPlanning(absolute_mode=True, collision_checking=False), 
             gripper_action_mode=Discrete()
             ),
-    obs_config=obs_config,
-        headless=False)
+        obs_config=obs_config,
+        headless=args.headless)
     env.launch()
     # num_obs_per_task = args.obs_per_task
 
-    for task_name in task_list:
+    for task_name in tqdm(task_list):
         print(f'Processing task: {task_name}')
         taskName = underscore_string_to_camel_case(task_name)
         try:
@@ -119,6 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_name', type=str, default='pick_up_cup', help='task name')
     # parser.add_argument('--obs_per_task', type=int, default=1, help='number of observations per task')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
+    parser.add_argument('--headless', action='store_true', help='run in headless mode')
     parser.add_argument('--save', type=bool, default=True, help='whether to save images')
     parser.add_argument('--DEBUG', action='store_true', default=False, help='debug mode')
     parser.add_argument('--save_dir', type=str, default='./outputs/', help='save directory')
