@@ -71,7 +71,7 @@ def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
         post_grasp_trajectory.append(t)
     return np.array(post_grasp_trajectory)
 
-def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
+def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, vis=False):
     "plan smooth gripper trajectory based on affordance trajectory"
     current_gripper_pose = obs.gripper_pose[:7]
     offset = affordance_traj_world[0] - current_gripper_pose[:3]
@@ -89,22 +89,30 @@ def plan_gripper_trajectory(obs, affordance_traj_world, vis=False):
     post_gripper_poses[:, :3] += noise[:, :3]
     actions = post_gripper_poses
 
+    # world frame pcd
+    current_pts = obs.left_shoulder_point_cloud
+    current_pcd = visualize_points(current_pts.reshape(-1, 3))
+
+    # camera_name = 'cam_over_shoulder_left'
+    # current_pcd = get_pcd_with_color(obs, camera_name)
+    # T_world_cam = get_T_world_cam_gl(obs, camera_name)
+    # current_pcd.transform(T_world_cam)
+
+    action_vis = []
+    for i in range(len(actions)):
+        action_vis.append(vis_pose(actions[i][:3], Rot.from_quat(actions[i][3:7]).as_matrix()))
+    world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
+    plan_trajectory = visualize_3d_trajectory(affordance_traj_world, size=0.02, cmap_name="plasma", invert=False)
+    
     if vis:
-        # world frame pcd
-        current_pts = obs.left_shoulder_point_cloud
-        current_pcd = visualize_points(current_pts.reshape(-1, 3))
-
-        # camera_name = 'cam_over_shoulder_left'
-        # current_pcd = get_pcd_with_color(obs, camera_name)
-        # T_world_cam = get_T_world_cam_gl(obs, camera_name)
-        # current_pcd.transform(T_world_cam)
-
-        action_vis = []
-        for i in range(len(actions)):
-            action_vis.append(vis_pose(actions[i][:3], Rot.from_quat(actions[i][3:7]).as_matrix()))
-        world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
-        plan_trajectory = visualize_3d_trajectory(affordance_traj_world, size=0.02, cmap_name="plasma", invert=False)
         o3d.visualization.draw_geometries(action_vis + plan_trajectory + [current_pcd ,world])
+    else: 
+        mesh = o3d.geometry.TriangleMesh()
+        for wp_vis in plan_trajectory:
+            mesh += wp_vis
+        o3d.io.write_triangle_mesh(save_fn, mesh)
+        point_cloud_save_fn = save_fn.replace('.ply', '_pcd.ply')
+        o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
     return actions
 
 def save_frame(frame_idx, camera, obs, image_save_dir):
@@ -150,7 +158,7 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
             fallback_action[:3] += direction * 0.01 / np.linalg.norm(direction)
         return fallback_action
 
-def plan_motion_plan(obs, motion_plan_world, vis=False):
+def plan_motion_plan(obs, motion_plan_world,traj_save_fn, vis=False):
     """Plan smooth gripper trajectory based on motion plan"""
     current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
     
@@ -169,20 +177,27 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
         post_gripper_poses.append(np.concatenate([post_gripper_translation, post_gripper_rotation.as_quat()]))
         
     # vis unsmooothed trajectory
+    current_pts = obs.left_shoulder_point_cloud
+    current_pcd = visualize_points(current_pts.reshape(-1, 3))
+    action_vis = []
+    for i in range(len(post_gripper_poses)):
+        action_vis.append(vis_pose(post_gripper_poses[i][:3], 
+                        Rot.from_quat(post_gripper_poses[i][3:7]).as_matrix()))
+    world = o3d.geometry.TriangleMesh.create_coordinate_frame(
+        size=0.1, origin=[0,0,0])
+    plan_trajectory = visualize_3d_trajectory(
+        np.array(post_gripper_poses)[:, :3], size=0.02, 
+        cmap_name="plasma", invert=False)
     if vis:
-        current_pts = obs.left_shoulder_point_cloud
-        current_pcd = visualize_points(current_pts.reshape(-1, 3))
-        action_vis = []
-        for i in range(len(post_gripper_poses)):
-            action_vis.append(vis_pose(post_gripper_poses[i][:3], 
-                            Rot.from_quat(post_gripper_poses[i][3:7]).as_matrix()))
-        world = o3d.geometry.TriangleMesh.create_coordinate_frame(
-            size=0.1, origin=[0,0,0])
-        plan_trajectory = visualize_3d_trajectory(
-            np.array(post_gripper_poses)[:, :3], size=0.02, 
-            cmap_name="plasma", invert=False)
         o3d.visualization.draw_geometries(
             action_vis + plan_trajectory + [current_pcd, world])
+    else:
+        mesh = o3d.geometry.TriangleMesh()
+        for wp_vis in plan_trajectory:
+            mesh += wp_vis
+        o3d.io.write_triangle_mesh(traj_save_fn, mesh)
+        point_cloud_save_fn = traj_save_fn.replace('.ply', '_pcd.ply')
+        o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
     
     # Process the motion plan with smooth interpolation
     interpolated_poses = []
@@ -250,20 +265,25 @@ def plan_motion_plan(obs, motion_plan_world, vis=False):
     actions = post_gripper_poses
     print(f'Generated {len(actions)} action steps from motion plan')
     
+    current_pts = obs.left_shoulder_point_cloud
+    current_pcd = visualize_points(current_pts.reshape(-1, 3))
+    action_vis = []
+    for i in range(len(actions)):
+        action_vis.append(vis_pose(actions[i][:3], 
+                        Rot.from_quat(actions[i][3:7]).as_matrix()))
+    world = o3d.geometry.TriangleMesh.create_coordinate_frame(
+        size=0.1, origin=[0,0,0])
+    plan_trajectory = visualize_3d_trajectory(
+        post_gripper_poses[:, :3], size=0.02, 
+        cmap_name="plasma", invert=False)
     if vis:
-        current_pts = obs.left_shoulder_point_cloud
-        current_pcd = visualize_points(current_pts.reshape(-1, 3))
-        action_vis = []
-        for i in range(len(actions)):
-            action_vis.append(vis_pose(actions[i][:3], 
-                            Rot.from_quat(actions[i][3:7]).as_matrix()))
-        world = o3d.geometry.TriangleMesh.create_coordinate_frame(
-            size=0.1, origin=[0,0,0])
-        plan_trajectory = visualize_3d_trajectory(
-            post_gripper_poses[:, :3], size=0.02, 
-            cmap_name="plasma", invert=False)
         o3d.visualization.draw_geometries(
             action_vis + plan_trajectory + [current_pcd, world])
+    else:
+        mesh = o3d.geometry.TriangleMesh()
+        for wp_vis in plan_trajectory:
+            mesh += wp_vis
+        o3d.io.write_triangle_mesh(traj_save_fn.replace('.ply', '_smoothed.ply'), mesh)
     return actions
 
 def main(args, sim_cfg):
@@ -381,13 +401,15 @@ def main(args, sim_cfg):
             if args.save_video:
                 save_frame(frame_idx, args.video_camera, obs, image_save_dir)
                 frame_idx += 1
+
+            traj_save_fn = os.path.join(SAVE_ROOT, camera, f'planned_traj_{i}.ply')
             # get new obs and plan actions
             if method == 'ours':
-                actions = plan_motion_plan(obs, motion_plan_world, vis=DEBUG_VIS)
+                actions = plan_motion_plan(obs, motion_plan_world, traj_save_fn, vis=DEBUG_VIS)
             elif method == 'RAM':
-                actions = plan_gripper_trajectory(obs, post_grasp_trajectory, vis=DEBUG_VIS)
+                actions = plan_gripper_trajectory(obs, post_grasp_trajectory, traj_save_fn, vis=DEBUG_VIS)
             elif method == 'gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
-                actions = plan_gripper_trajectory(obs, traj_world, vis=DEBUG_VIS)
+                actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, vis=DEBUG_VIS)
 
 
             episode_length = len(actions)+5
