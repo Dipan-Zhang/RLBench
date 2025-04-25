@@ -64,8 +64,9 @@ def save_observation(task, obs, cam_name='cam_front', task_name='', object_name=
     task_data['T_world_cam'] = T_world_cam
     
     # save mask
-    if task_name == 'open_cabinet' or task_name == 'open_slide_cabinet' or task_name == 'down_toilet_seat':
-        "use the cropped mask for open cabinet tasks"
+    manually_mask_list = ['open_cabinet', 'open_slide_cabinet', 'close_slide_cabinet', 'down_toilet_seat', 'open_drawer', 'close_drawer']
+    if task_name in manually_mask_list:
+        "use the cropped mask for some tasks"
         cropped_mask_fn = os.path.join(save_dir, 'mask_000001.png')
         shutil.copyfile(cropped_mask_fn, os.path.join(save_dir, 'mask_000000.png'))
     else:
