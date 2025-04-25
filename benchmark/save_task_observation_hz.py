@@ -13,12 +13,15 @@ from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, En
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from tqdm import tqdm
+import json
+import shutil
 
 from benchmark.helpers import (
                         visualize_points,
                         visualize_3d_trajectory,
                         preprocess_target_data,
-                        underscore_string_to_camel_case
+                        underscore_string_to_camel_case,
+                        backproject
                         )
 from benchmark.sim_utils import (
     create_obs_config,
@@ -27,10 +30,11 @@ from benchmark.sim_utils import (
     restore_robot_position,
     set_camera_pose,
     CAMERA_POSES,
+    get_T_world_cam_gl
     )
 
 
-def save_observation(obs, cam_name='cam_front', task_name='', object_name='', save_dir='./outputs'):
+def save_observation(task, obs, cam_name='cam_front', task_name='', object_name='', save_dir='./outputs'):
     "save observation to disk for affordance prediction"
     assert object_name != '', 'object name cannot be empty'
 
@@ -43,7 +47,7 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     # fix the negative focal length
     cam_K[0, 0] = np.abs(cam_K[0,0])
     cam_K[1, 1] = np.abs(cam_K[1,1])
-    T_world_cam = obs.misc[key_name+'_extrinsics'].copy()
+    T_world_cam = get_T_world_cam_gl(obs, cam_name)
 
     task_rgb_save_fn = os.path.join(save_dir, 'color_000000.png')
     cv2.imwrite(task_rgb_save_fn, rgb[:,:,::-1])
@@ -57,14 +61,18 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     o3d.io.write_point_cloud(pointcloud_save_fn, pcd)
 
     task_data = preprocess_target_data(rgb, depth, cam_K, 'kinect', obj_name=object_name)
-    # task_data['pointcloud'] = pointcloud_reshaped
     task_data['T_world_cam'] = T_world_cam
     
     # save mask
-    object_mask = task_data['mask']
-    object_mask = (object_mask * 255).astype(np.uint8)
-    mask_save_fn = os.path.join(save_dir, 'mask_000000.png')
-    cv2.imwrite(mask_save_fn, object_mask)
+    if task_name == 'open_cabinet' or task_name == 'open_slide_cabinet' or task_name == 'down_toilet_seat':
+        "use the cropped mask for open cabinet tasks"
+        cropped_mask_fn = os.path.join(save_dir, 'mask_000001.png')
+        shutil.copyfile(cropped_mask_fn, os.path.join(save_dir, 'mask_000000.png'))
+    else:
+        object_mask = task_data['mask']
+        object_mask = (object_mask * 255).astype(np.uint8)
+        mask_save_fn = os.path.join(save_dir, 'mask_000000.png')
+        cv2.imwrite(mask_save_fn, object_mask)
     
     # save the task data
     task_data_save_fn = os.path.join(save_dir, 'task_data.npz')
@@ -75,6 +83,31 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     cropped_rgb = task_data['cropped_rgb']
     cv2.imwrite(os.path.join(save_dir, 'cropped_rgb.png'), cropped_rgb[:,:,::-1])
 
+    # get the gripper pose
+    scene_waypoints = task._scene.task.get_waypoints()
+    T_world_gripper = np.eye(4)
+    found_close_gripper = False
+    for wp in scene_waypoints:
+        ext_description = wp.get_ext()
+        if 'close_gripper' in ext_description:
+            T_world_gripper = wp.get_waypoint_object().get_matrix()
+            found_close_gripper = True
+    if not found_close_gripper:
+        T_world_gripper = scene_waypoints[1].get_waypoint_object().get_matrix()
+
+    # save results into a meta.json file
+    T_world_cam = get_T_world_cam_gl(obs, cam_name)
+    T_cam_gripper = np.linalg.inv(T_world_cam) @ T_world_gripper
+    meta_data = {}
+    meta_data['contact_point'] = T_cam_gripper[:3,3].tolist()
+    meta_data['T_cam_gripper'] = T_cam_gripper.reshape(-1).tolist()
+    meta_data['T_world_cam'] = T_world_cam.reshape(-1).tolist()
+    meta_data['T_world_gripper'] = T_world_gripper.reshape(-1).tolist()
+    meta_data['intrinsics'] = cam_K.reshape(-1).tolist()
+
+    meta_data_save_fn = os.path.join(save_dir, 'meta_000000.json')
+    with open(meta_data_save_fn, 'w') as f:
+        json.dump(meta_data, f)
 
 def main(args, sim_cfg, task_list):
     # set up env
@@ -127,7 +160,7 @@ def main(args, sim_cfg, task_list):
             hide_robot_temporarily('Panda')
             set_camera_pose(camera_name, PREDEFINED_CAMS[camera_name]['pos'], PREDEFINED_CAMS[camera_name]['ori'] ) # get overview of the workspace
             obs = task.get_observation()
-            save_observation(obs, cam_name=camera_name, task_name=taskName, object_name=obj_name, save_dir=save_base_dir)
+            save_observation(task, obs, cam_name=camera_name, task_name=task_name, object_name=obj_name, save_dir=save_base_dir)
             restore_robot_position('Panda')
 
     print('Done')
