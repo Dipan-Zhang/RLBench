@@ -27,6 +27,8 @@ from benchmark.sim_utils import (
     restore_robot_position,
     set_camera_pose,
     CAMERA_POSES,
+    get_pcd_with_color,
+    get_T_world_cam_gl,
     )
 
 
@@ -48,23 +50,16 @@ def save_observation(obs, cam_name='cam_front', task_name='', object_name='', sa
     task_rgb_save_fn = os.path.join(save_dir, 'color_000000.png')
     cv2.imwrite(task_rgb_save_fn, rgb[:,:,::-1])
 
-    task_depth_save_fn = os.path.join(save_dir, 'depth_000000.png')
-    cv2.imwrite(task_depth_save_fn, (depth*1000).astype(np.uint16))
-
     pointcloud_save_fn = os.path.join(save_dir, 'pcd.ply')
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pointcloud_reshaped)
+
+    pcd = get_pcd_with_color(obs, cam_name)
+    T_world_cam = get_T_world_cam_gl(obs, cam_name)
+    pcd.transform(T_world_cam)
     o3d.io.write_point_cloud(pointcloud_save_fn, pcd)
 
     task_data = preprocess_target_data(rgb, depth, cam_K, 'kinect', obj_name=object_name)
     task_data['pointcloud'] = pointcloud_reshaped
     task_data['T_world_cam'] = T_world_cam
-    
-    # save mask
-    object_mask = task_data['mask']
-    object_mask = (object_mask * 255).astype(np.uint8)
-    mask_save_fn = os.path.join(save_dir, 'mask_000000.png')
-    cv2.imwrite(mask_save_fn, object_mask)
     
     # save the task data
     task_data_save_fn = os.path.join(save_dir, 'task_data.npz')
