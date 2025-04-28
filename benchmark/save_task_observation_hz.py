@@ -29,7 +29,7 @@ from benchmark.sim_utils import (
     hide_robot_temporarily, 
     restore_robot_position,
     set_camera_pose,
-    CAMERA_POSES,
+    CAMERA_POSES_HZ,
     get_T_world_cam_gl
     )
 
@@ -145,7 +145,7 @@ def main(args, sim_cfg, task_list):
         obs = task.get_observation()
         print('<===== Task description: ====>\n', descriptions)
         obj_name = descriptions[0].split(' ')[-1]
-        PREDEFINED_CAMS = CAMERA_POSES[taskName]
+        PREDEFINED_CAMS = CAMERA_POSES_HZ[taskName]
         hz_cam_convert = {
             'cam_overhead': 'default',
             'cam_front': 'default',

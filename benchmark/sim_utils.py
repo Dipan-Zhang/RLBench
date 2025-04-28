@@ -576,13 +576,36 @@ def vis_pose(pos, ori, size=0.05):
     frame.transform(T_w_obj)
     return frame
 
-def interpolate_trajectory(waypoints, num_points=5):
+def interpolate_trajectory(waypoints, distance_threshold=0.01, min_points=2):
+    """
+    Interpolates a trajectory based on distance threshold between consecutive waypoints.
+    
+    Args:
+        waypoints (np.ndarray): Array of waypoint positions.
+        distance_threshold (float): Maximum distance between consecutive points after interpolation.
+        min_points (int): Minimum number of points to interpolate between waypoints.
+        
+    Returns:
+        np.ndarray: Array of interpolated waypoints.
+    """
+    if len(waypoints) < 2:
+        return np.array(waypoints)
+    
     interpolated = []
     for i in range(len(waypoints) - 1):
         start = waypoints[i]
         end = waypoints[i + 1]
+        
+        # Calculate the distance between consecutive waypoints
+        distance = np.linalg.norm(end - start)
+        
+        # Calculate how many points we need based on the distance threshold
+        num_points = max(min_points, int(np.ceil(distance / distance_threshold)))
+        
+        # Generate the interpolated points
         for t in np.linspace(0, 1, num_points):
             interpolated.append((1 - t) * start + t * end)
+    
     return np.array(interpolated)
 
 
@@ -724,3 +747,310 @@ def visualize_affordance_in_pointcloud(demo_pcd, target_pcd, T_o1c1, T_c2o1, aff
 
     ipdb.set_trace()
     o3d.visualization.draw_geometries([target_pcd_vis, c2_axis,  demo_pcd_vis, c1_axis ] + affordance_vis)
+
+
+def backproject(depth, intrinsics, instance_mask, NOCS_convention=True):
+    """backproject depth image to 3d points
+    Args:
+        depth: [h, w]
+        intrinsics: [3, 3]
+        instance_mask: [h, w]
+    return: pts: [num_pixel, 3], idxs: [2, num_pixel]
+    """
+    intrinsics_inv = np.linalg.inv(intrinsics)
+    non_zero_mask = depth > 0
+    final_instance_mask = np.logical_and(instance_mask, non_zero_mask)
+
+    idxs = np.where(final_instance_mask)
+    grid = np.array([idxs[1], idxs[0]])
+
+    length = grid.shape[1]
+    ones = np.ones([1, length])
+    uv_grid = np.concatenate((grid, ones), axis=0)  # [3, num_pixel]
+
+    xyz = intrinsics_inv @ uv_grid  # [3, num_pixsel]
+    xyz = np.transpose(xyz)  # [num_pixel, 3]
+
+    z = depth[idxs[0], idxs[1]]
+
+    pts = xyz * z[:, np.newaxis] / xyz[:, -1:]
+    if NOCS_convention:
+        pts[:, 1] = -pts[:, 1]
+        pts[:, 2] = -pts[:, 2]
+    return pts, idxs
+
+def backproject_with_color(depth, color, intrinsic, mask, NOCS_convention= False):
+    "backproject depth to 3d points and get color"
+    pts, pts_idx = backproject(depth, intrinsic, mask, NOCS_convention=False)
+    color = (color / 255.0).astype(np.float32)
+    colors = color[pts_idx[0], pts_idx[1]]
+    return pts, colors
+
+def visualize_points(points, colors=None):
+    "take points and return open3d pcd"
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    if colors is not None:
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+    return pcd
+
+def get_pcd_with_color(obs, camera_name):
+    "get point cloud backprojected from depth and color"
+    key_name = convert_camera_name(camera_name)
+    color = getattr(obs, f'{key_name[:-7]}_rgb')
+    depth = getattr(obs, f'{key_name[:-7]}_depth')
+    intrinsics = obs.misc[key_name+'_intrinsics']
+    intrinsics[0, 0] = np.abs(intrinsics[0, 0])
+    intrinsics[1, 1] = np.abs(intrinsics[1, 1])
+    pts, colors = backproject_with_color(depth, color, intrinsics, depth<10, False)
+    pcd_w_color = visualize_points(pts, colors)
+    return pcd_w_color
+
+def get_T_world_cam_gl(obs, camera):
+    "get T_world_cam in OpenGL convention from observation"
+    cam_key = convert_camera_name(camera)
+    T_world_cam = obs.misc[cam_key+'_extrinsics'].copy()
+
+    # converting coppliaSIM camera convention to OpenGL
+    R_z_180 = np.array(
+        [[ -1,  0,  0],
+        [  0, -1,  0],
+        [  0,  0,  1]])
+    T_world_cam[:3, :3] = T_world_cam[:3, :3] @ R_z_180
+    return T_world_cam
+
+
+CAMERA_POSES_HZ = {
+    "PickUpBottle":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+    },
+    "PickUpCup":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+        },
+    "PickUpMug":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+        },
+    "PickUpBowl":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+        },
+
+
+    "OpenDrawer":{
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [105, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [105, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
+    },
+    "CloseDrawer":{
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [110, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [110, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
+    },
+
+    "OpenMicrowave":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+    "CloseMicrowave":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+
+    "OpenDishwasher":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-94, -19, -180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-95, 18, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+    "CloseLaptop":{
+        'cam_over_shoulder_left':{
+            'pos': [0.8, -1.5, 1.2],
+            'ori': [-100, -14, 180]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.2, -1.5, 1.2],
+            'ori': [-100, 14, 180]
+        },
+        'cam_overhead':{
+            'pos': [0.2, -1.6, 1.7],
+            'ori': [-115, 0, -180]
+        }
+    },
+
+    "DownToiletSeat":{
+        'cam_over_shoulder_left':{
+            'pos': [0.5, 1.6, 1.4],
+            'ori': [105, -5, 0]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [-0.1, 1.6, 1.4],
+            'ori': [105, 5, 0]
+        },
+        'cam_overhead':{
+            'pos': [0.2, 1.6, 1.7],
+            'ori': [110, 0, 0]
+        }
+    },
+    "OpenSlideCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-0.8, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-0.8, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-0.8, 0.0, 1.9],
+        'ori': [-180, 55, -90]
+        }
+    },
+    "CloseSlideCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 74, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 74, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+
+    "OpenFridge":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+    "OpenCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+    "CloseCabinet":{
+        'cam_over_shoulder_left':{
+        'pos': [-1.0, 0.2, 1.7],
+        'ori': [150, 67, -60]
+        },
+        'cam_over_shoulder_right':{
+        'pos': [-1.0, -0.2, 1.7],
+        'ori': [-170, 70, -100]
+        },
+        'cam_overhead':{
+        'pos': [-1.2, 0.0, 1.9],
+        'ori': [166, 70, -80]
+        }
+    },
+
+
+}

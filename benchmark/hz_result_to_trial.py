@@ -47,6 +47,7 @@ if __name__ == "__main__":
     trial_name = f'trial_{get_time()}'
     hz_cams = ['default', 'left', 'right']
     methods = ['gflow', 'vrb', 'where2act']
+    # methods = ['ours-newgoalmodel']
     for task in tqdm(TASKS):
         # print(f"====================Task: {task}=====================")
         # # task_env, task_name = task.split("@")
