@@ -31,7 +31,7 @@ from scipy.spatial.transform import Slerp
 from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
-          adjust_camera_pose, set_camera_pose, CAMERA_POSES, get_T_world_cam_gl, \
+          adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
           get_pcd_with_color
 import importlib
 import os
@@ -70,7 +70,7 @@ def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
         post_grasp_trajectory.append(t)
     return np.array(post_grasp_trajectory)
 
-def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, vis=False):
+def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, smooth=False, vis=False):
     "plan smooth gripper trajectory based on affordance trajectory"
     current_gripper_pose = obs.gripper_pose[:7]
     offset = affordance_traj_world[0] - current_gripper_pose[:3]
@@ -78,9 +78,10 @@ def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, vis=False):
     affordance_traj_world = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world], axis=0)
     
     # smoothen the trajectory
-    affordance_traj_world = interpolate_trajectory(affordance_traj_world, distance_threshold=0.01)
+    if smooth:
+        affordance_traj_world = interpolate_trajectory(affordance_traj_world, distance_threshold=0.01)
+        
     post_gripper_ori = current_gripper_pose[3:7]
-
     post_gripper_poses = np.concatenate((
         affordance_traj_world, 
         np.repeat(post_gripper_ori.reshape(-1, 4), affordance_traj_world.shape[0], axis=0)), axis=1)
@@ -358,7 +359,10 @@ def main(args, sim_cfg):
                 os.makedirs(image_save_dir, exist_ok=True)
                 frame_idx = 0  # to number frames
 
-            PREDEFINED_CAM = CAMERA_POSES[taskName]
+            if method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
+                PREDEFINED_CAM = CAMERA_POSES_HZ[taskName]
+            else:
+                PREDEFINED_CAM = CAMERA_POSES[taskName]
             set_camera_pose(camera, PREDEFINED_CAM[camera]['pos'], PREDEFINED_CAM[camera]['ori'] )
             
             # smoothen the trajectory
@@ -409,9 +413,9 @@ def main(args, sim_cfg):
             if method == 'ours':
                 actions = plan_motion_plan(obs, motion_plan_world, traj_save_fn, vis=DEBUG_VIS)
             elif method == 'RAM':
-                actions = plan_gripper_trajectory(obs, post_grasp_trajectory, traj_save_fn, vis=DEBUG_VIS)
+                actions = plan_gripper_trajectory(obs, post_grasp_trajectory, traj_save_fn, smooth=True, vis=DEBUG_VIS)
             elif method == 'gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
-                actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, vis=DEBUG_VIS)
+                actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, smooth=False, vis=DEBUG_VIS)
 
 
             episode_length = len(actions)+5
