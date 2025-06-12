@@ -71,6 +71,16 @@ class CircleCameraMotion(CameraMotion):
     def step(self):
         self.origin.rotate([0, 0, self.speed])
 
+class FixedCameraMotion(CameraMotion):
+
+    def __init__(self, cam: VisionSensor, origin: Dummy, speed: float):
+        super().__init__(cam)
+        self.origin = origin
+        self.speed = speed  # in radians
+
+    def step(self):
+        pass
+
 
 class TaskRecorder(object):
 
@@ -114,6 +124,21 @@ class TaskRecorder(object):
             video.write(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         video.release()
         self._snaps = []
+    
+    def save_single(self, path, fps=None):
+        # save current snap,
+        print('Converting to video ...')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # OpenCV QT version can conflict with PyRep, so import here
+        fps = fps if fps is not None else self._fps
+        import cv2
+        video = cv2.VideoWriter(
+                path, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), fps,
+                tuple(self._cam_motion.cam.get_resolution()))
+        for image in self._current_snaps:
+            video.write(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        video.release()
+        self._current_snaps = []
 
 
 def main(argv):

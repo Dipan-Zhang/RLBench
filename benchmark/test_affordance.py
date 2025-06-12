@@ -12,8 +12,12 @@ from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, En
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.backend.exceptions import InvalidActionError
+from tools.cinematic_recorder import FixedCameraMotion, TaskRecorder
 
 from pyrep.errors import ConfigurationPathError
+from pyrep.objects import Dummy
+from pyrep.objects.vision_sensor import VisionSensor
+
 from benchmark.helpers import (
                         visualize_points,
                         visualize_3d_trajectory,
@@ -37,7 +41,6 @@ import importlib
 import os
 import pandas as pd
 from typing import List, Tuple
-
 
 def transform_motion_plan(motion_plan, T_cam_obj):
     """
@@ -113,12 +116,6 @@ def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, smooth=False, v
         o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
     return actions
 
-def save_frame(frame_idx, camera, obs, image_save_dir):
-    # Save the RGB frame
-    frame = getattr(obs, f'{camera}_rgb')
-    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-    frame_path = os.path.join(image_save_dir, f"{frame_idx:06d}.png")
-    cv2.imwrite(frame_path, frame_bgr)
 
 def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
     """Execute sparse actions with fallback for motion planning failures"""
@@ -316,6 +313,15 @@ def main(args, sim_cfg):
     )
     env.launch()
 
+    # set up cinematic camera
+    cam_placeholder = Dummy('cam_cinematic_placeholder')
+    cam = VisionSensor.create([1280, 720])
+    cam.set_pose(cam_placeholder.get_pose())
+    cam.set_parent(cam_placeholder)
+    cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
+    tr = TaskRecorder(env, cam_motion, fps=30)
+    
+
     mod = importlib.import_module("rlbench.tasks")
     mod = importlib.reload(mod)
     task_class = getattr(mod, taskName)
@@ -346,7 +352,7 @@ def main(args, sim_cfg):
     else:
         raise ValueError('Invalid affordance method name')
     
-
+    video_camera = args.video_camera
     exp_results_all = {}
     for camera in camera_names:
         result_list = []
@@ -354,10 +360,9 @@ def main(args, sim_cfg):
             print(f'Camera {camera}, Episode {i}')
             if args.save_video:
                 image_save_dir = "./outputs/{}/exp_results/{}/{}/video_{}/obs_{}/trial_{}".format(
-                    taskName, method, trial_name, args.video_camera, camera, i
+                    taskName, method, trial_name, video_camera, camera, i
                 )
                 os.makedirs(image_save_dir, exist_ok=True)
-                frame_idx = 0  # to number frames
 
             if method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
                 PREDEFINED_CAM = CAMERA_POSES_HZ[taskName]
@@ -370,8 +375,7 @@ def main(args, sim_cfg):
             descriptions, obs = task.reset()
             obs = task.get_observation()
             if args.save_video:
-                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-                frame_idx += 1
+                tr.take_snap(obs=obs)
 
             if method == 'ours':
                 motion_plan_c2 = motion_data[camera][i]['motion_plan']
@@ -405,8 +409,7 @@ def main(args, sim_cfg):
             obs = task.get_observation()
     
             if args.save_video:
-                save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-                frame_idx += 1
+                tr.take_snap(obs)
 
             traj_save_fn = os.path.join(SAVE_ROOT, camera, f'planned_traj_{i}.ply')
             # get new obs and plan actions
@@ -429,8 +432,7 @@ def main(args, sim_cfg):
                     break
                 trajectory_idx+=1
                 if args.save_video:
-                    save_frame(frame_idx, args.video_camera, obs, image_save_dir)
-                    frame_idx += 1
+                    tr.take_snap(obs)
         
                 if terminate:
                     if not reward:
@@ -451,10 +453,7 @@ def main(args, sim_cfg):
 
             # compose video
             if args.save_video:
-                cmd = "ffmpeg -framerate 30 -start_number 0 -i {}/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/output.mp4 -y".format(
-                    image_save_dir, image_save_dir
-                )
-                os.system(cmd)
+                tr.save_single(os.path.join(image_save_dir, 'video.mp4'), fps=10)
         if not args.no_save_result:
             # Save the results
             save_fn = os.path.join(SAVE_ROOT, camera, 'exp_result.csv')
@@ -494,7 +493,7 @@ if __name__ == '__main__':
     # parser.add_argument('--camera', type=str, default='cam_front', help='camera for affordance transfer')
     parser.add_argument('-t', '--task_name', type=str, default='pick_up_bottle', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
-    parser.add_argument('--save_video', type=bool, default=False, help='whether to save video')
+    parser.add_argument('--save_video', action='store_true', help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
