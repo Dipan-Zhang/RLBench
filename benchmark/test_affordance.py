@@ -313,13 +313,13 @@ def main(args, sim_cfg):
     )
     env.launch()
 
-    # set up cinematic camera
-    cam_placeholder = Dummy('cam_cinematic_placeholder')
-    cam = VisionSensor.create([1280, 720])
-    cam.set_pose(cam_placeholder.get_pose())
-    cam.set_parent(cam_placeholder)
-    cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
-    tr = TaskRecorder(env, cam_motion, fps=30)
+    if args.save_video:
+        cam_placeholder = Dummy('cam_cinematic_placeholder')
+        cam = VisionSensor.create([1280, 720])
+        cam.set_pose(cam_placeholder.get_pose())
+        cam.set_parent(cam_placeholder)
+        cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
+        tr = TaskRecorder(env, cam_motion, fps=30)
     
 
     mod = importlib.import_module("rlbench.tasks")
