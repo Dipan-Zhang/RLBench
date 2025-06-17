@@ -83,11 +83,12 @@ def calculate_dtm_metrics(trial_path):
 
     # load DTM GT if exists
     DTM_all = {}
-    camera_names = os.listdir(obs_fp)
+    # camera_names = os.listdir(obs_fp)
+    camera_names = list(transferred_results.keys())
     
     for camera_name in camera_names:
         DTM_per_cam = []
-        rgb_fn = os.path.join(obs_fp, camera_name, 'rgb.png')
+        rgb_fn = os.path.join(obs_fp, camera_name, 'color_000000.png')
         
         if not os.path.exists(rgb_fn):
             print(f"Warning: RGB image not found at {rgb_fn}, skipping {camera_name}")
@@ -275,7 +276,7 @@ def summarize_single(trial_dir):
     
     # Calculate DTM if needed
     dtm_data = {}
-    if not args.skip_dtm:
+    if args.dtm:
         print("Calculating DTM metrics...")
         dtm_data = calculate_dtm_metrics(trial_dir)
     else:
@@ -303,15 +304,18 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--task', type=str, default='all', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='method name' )
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
+    parser.add_argument('--data_dir', type=str, default='./outputs', help='data directory')
     parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
-    parser.add_argument('--skip-dtm', action='store_true', help="Skip DTM calculation (use existing data)")
+    parser.add_argument('--dtm', action='store_true', help="Skip DTM calculation (use existing data)")
     args = parser.parse_args()
 
     method = args.method
     sim_cfg_fp = args.sim_config_fp
     sim_cfg = OmegaConf.load(sim_cfg_fp)
+    DATA_DIR = args.data_dir
     TASK_LIST_PORTABLE = sim_cfg['PORTABLE_TASK_LIST']
     TASK_LIST_ARTICULATE = sim_cfg['ARTICULATE_TASK_LIST']
+    TASK_LIST_ABLATION_2D = sim_cfg['ABLATION_2D_TASK_LIST']
 
     if args.task == 'all':
         TASKS = TASK_LIST_ARTICULATE + TASK_LIST_PORTABLE
@@ -319,6 +323,8 @@ if __name__ == '__main__':
         TASKS = TASK_LIST_PORTABLE
     elif args.task == 'articulate':
         TASKS = TASK_LIST_ARTICULATE
+    elif args.task =='ablation_2D':
+        TASKS = TASK_LIST_ABLATION_2D
     else:
         TASKS = [args.task]
 
@@ -326,7 +332,7 @@ if __name__ == '__main__':
     for task in TASKS:
         print(f"====================Task: {task}=====================")
         taskName = underscore_string_to_camel_case(task)
-        trial_dir = os.path.join('./outputs', taskName, method, args.trial_dir)
+        trial_dir = os.path.join(DATA_DIR, taskName, method, args.trial_dir)
         task_SR_mean, task_DTM_mean = summarize_single(trial_dir)
 
         SR_mean = task_SR_mean*100 if task_SR_mean is not None else None
@@ -337,7 +343,7 @@ if __name__ == '__main__':
 
     
     # save the average success rate for all tasks
-    benchmark_results_dir = os.path.join('./outputs', 'benchmark_result')
+    benchmark_results_dir = os.path.join(DATA_DIR, 'benchmark_result')
     os.makedirs(benchmark_results_dir, exist_ok=True)
     benchmark_results_fp = os.path.join(benchmark_results_dir, f'{method}_{args.trial_dir}.csv')
     benchmark_results_df = pd.DataFrame(benchmark_results)
