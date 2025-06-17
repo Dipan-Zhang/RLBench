@@ -55,12 +55,22 @@ ARTICULATE_TASK_LIST:
     'open_cabinet',
     'close_cabinet',
     'open_dishwasher',
+    'open_slide_cabinet',
+    'close_slide_cabinet',
 
     'close_laptop',
     'down_toilet_seat',
-    'open_slide_cabinet',
-    'close_slide_cabinet',
     # 'open_fridge', 
     # 'open_washing_machine',
   ]
   
+ABLATION_2D_TASK_LIST:
+  [
+    'open_microwave', 
+    'close_microwave',
+    'open_drawer', 
+    'open_dishwasher',
+    'open_slide_cabinet',
+    'close_laptop',
+    'open_cabinet',
+  ]

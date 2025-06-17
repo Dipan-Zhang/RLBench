@@ -22,6 +22,7 @@ if __name__ == "__main__":
     sim_cfg = OmegaConf.load(sim_cfg_fp)
     TASK_LIST_PORTABLE = sim_cfg['PORTABLE_TASK_LIST']
     TASK_LIST_ARTICULATE = sim_cfg['ARTICULATE_TASK_LIST']
+    ABLATION_2D_TASK_LIST = sim_cfg['ABLATION_2D_TASK_LIST']
 
     if args.task == 'all':
         TASKS =  TASK_LIST_ARTICULATE + TASK_LIST_PORTABLE
@@ -35,17 +36,9 @@ if __name__ == "__main__":
         TASKS = ['open_drawer', 'close_microwave', 'open_slide_cabinet', 'close_slide_cabinet', 'close_cabinet']
     elif args.task == 'ablation_multiple_goal_rest':
         TASKS = ['open_drawer', 'open_dishwasher', 'down_toilet_seat', 'close_slide_cabinet', 'open_slide_cabinet']
-        
+
     elif args.task =='ablation_2D':
-        TASKS = [
-            'open_microwave', 
-            'close_microwave',
-            'open_drawer', 
-            'open_dishwasher',
-            'open_slide_cabinet',
-            'close_laptop',
-            'open_cabinet',
-        ]
+        TASKS = ABLATION_2D_TASK_LIST
     else:
         TASKS = [args.task]
 
