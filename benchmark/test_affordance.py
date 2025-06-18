@@ -471,6 +471,16 @@ def main(args, sim_cfg):
             df = df.to_csv(save_fn, mode="w", index=None)
         exp_results_all[camera] = result_list
     
+    # print simplified results
+    print('Experiment Results Summary:')
+    print(f"Task: {task_name}, Method: {method}, Trial: {trial_name}")
+    SR = []
+    for camera, results in exp_results_all.items():
+        success_rate = np.mean(results) * 100
+        SR.append(success_rate)
+        print(f"Camera: {camera}, Success Rate: {success_rate:.2f}%")
+    print(f'Average Success Rate: {np.mean(SR)}%')
+    
     exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
     os.makedirs(exp_save_dir, exist_ok=True)
     exp_results_all_save_fp = os.path.join(exp_save_dir, 'exp_results_all.pkl')
