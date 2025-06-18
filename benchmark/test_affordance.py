@@ -27,6 +27,7 @@ from benchmark.helpers import (
                         visualize_motion_plan,
                         apply_motion_plan,
                         underscore_string_to_camel_case,
+                        scale_abs_trajectory,
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 from scipy.spatial.transform import Rotation as Rot
@@ -153,7 +154,7 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
             fallback_action[:3] += direction * 0.01 / np.linalg.norm(direction)
         return fallback_action
 
-def plan_motion_plan(obs, motion_plan_world,traj_save_fn, vis=False):
+def plan_motion_plan(obs, motion_plan_world,traj_save_fn, scale, vis=False):
     """Plan smooth gripper trajectory based on motion plan"""
     current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
     
@@ -163,6 +164,10 @@ def plan_motion_plan(obs, motion_plan_world,traj_save_fn, vis=False):
 
     post_gripper_matrices = apply_motion_plan(
         gripper_pose_matrix, motion_plan_world)
+    
+    post_gripper_matrices = scale_abs_trajectory(
+        post_gripper_matrices, scale=scale)
+    # Convert post-gripper matrices to poses
     
     post_gripper_poses = []
     for i in range(len(post_gripper_matrices)):
@@ -414,7 +419,7 @@ def main(args, sim_cfg):
             traj_save_fn = os.path.join(SAVE_ROOT, camera, f'planned_traj_{i}.ply')
             # get new obs and plan actions
             if method == 'ours':
-                actions = plan_motion_plan(obs, motion_plan_world, traj_save_fn, vis=DEBUG_VIS)
+                actions = plan_motion_plan(obs, motion_plan_world, traj_save_fn, args.scale, vis=DEBUG_VIS)
             elif method == 'RAM':
                 actions = plan_gripper_trajectory(obs, post_grasp_trajectory, traj_save_fn, smooth=True, vis=DEBUG_VIS)
             elif method == 'gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
@@ -496,6 +501,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_video', action='store_true', help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
+    parser.add_argument('--scale', type=float, default=2.5, help='scale factor for trajectory')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')

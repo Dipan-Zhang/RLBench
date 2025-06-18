@@ -56,12 +56,26 @@ def apply_motion_plan(pose_init, motion_plan):
             print("Skip invalid motion plan")
             continue
         new_pose = np.eye(4)
-        new_pose[:3, :3] = current_pose[:3, :3] @ R
+        new_pose[:3, :3] = R @ current_pose[:3, :3] 
         pos = current_pose[:3, 3].copy()
         new_pose[:3, 3] = np.matmul(R, pos[..., None]).squeeze() + t
         poses.append(new_pose)
         current_pose = new_pose
     return poses
+
+def scale_abs_trajectory(traj, scale, reciprocal=False):
+    "scale trajectory poses traj: [H, 4, 4]"
+    if reciprocal:
+        scale = 1 / scale
+
+    if isinstance(traj, list):
+        traj = np.array(traj)
+    traj_pos = traj[:, :3, 3]  # [H, 3]
+    traj_pos_init = traj_pos[0:1]  # [1, 3]
+    traj_dist = traj_pos - traj_pos_init  # [H, 3]
+    traj_pos = traj_pos_init + traj_dist * scale  # [H, 3]
+    traj[:, :3, 3] = traj_pos
+    return traj
 
 def visualize_motion_plan(contact_pt, motion_plan):
     "visualize motion plan with contact point, contact_pt: [3,], motion_plan: [(R, t, success), ..."
