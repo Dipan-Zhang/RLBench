@@ -19,7 +19,7 @@ class CloseSlideCabinet(Task):
 
     def init_episode(self, index: int) -> List[str]:
         self.register_success_conditions(
-            [JointCondition(self.left_joint, 0.07)])
+            [JointCondition(self.left_joint, 0.1)])
 
 
         return ['slide left cabinet open',
