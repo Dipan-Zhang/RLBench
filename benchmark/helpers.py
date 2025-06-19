@@ -46,7 +46,7 @@ def apply_motion_plan(pose_init, motion_plan):
     - pose_init: [4, 4], 
     - motion_plan: List[(R, t, success), ...], R: [3, 3], t: [3, ]
     Returns:
-    - poses: [4, 4], list of *absolute* poses
+    - poses: list of *absolute* poses in shape [4, 4]
     """
     poses = [pose_init.copy()]
     current_pose = poses[0]

@@ -154,7 +154,7 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
             fallback_action[:3] += direction * 0.01 / np.linalg.norm(direction)
         return fallback_action
 
-def plan_motion_plan(obs, motion_plan_world,traj_save_fn, scale, vis=False):
+def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
     """Plan smooth gripper trajectory based on motion plan"""
     current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
     
@@ -416,7 +416,9 @@ def main(args, sim_cfg):
             if args.save_video:
                 tr.take_snap(obs)
 
-            traj_save_fn = os.path.join(SAVE_ROOT, camera, f'planned_traj_{i}.ply')
+            planned_traj_save_dir = os.path.join(SAVE_ROOT, camera, str(i), 'traj')
+            os.makedirs(planned_traj_save_dir, exist_ok=True)
+            traj_save_fn = os.path.join(planned_traj_save_dir, f'planned_traj_{i}.ply')
             # get new obs and plan actions
             if method == 'ours':
                 actions = plan_motion_plan(obs, motion_plan_world, traj_save_fn, args.scale, vis=DEBUG_VIS)
@@ -511,7 +513,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_video', action='store_true', help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
-    parser.add_argument('--scale', type=float, default=2.5, help='scale factor for trajectory')
+    parser.add_argument('--scale', type=float, default=1.5, help='scale factor for trajectory')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
     parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
