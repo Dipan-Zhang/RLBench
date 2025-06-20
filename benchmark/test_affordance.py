@@ -416,7 +416,7 @@ def main(args, sim_cfg):
             if args.save_video:
                 tr.take_snap(obs)
 
-            planned_traj_save_dir = os.path.join(SAVE_ROOT, camera, str(i), 'traj')
+            planned_traj_save_dir = os.path.join(SAVE_ROOT, camera, f'trial_{i}', 'traj')
             os.makedirs(planned_traj_save_dir, exist_ok=True)
             traj_save_fn = os.path.join(planned_traj_save_dir, f'planned_traj_{i}.ply')
             # get new obs and plan actions
@@ -472,34 +472,35 @@ def main(args, sim_cfg):
             df = pd.DataFrame(to_write)
             df = df.to_csv(save_fn, mode="w", index=None)
         exp_results_all[camera] = result_list
-    
-    # print simplified results
-    print('Experiment Results Summary:')
-    print(f"Task: {task_name}, Method: {method}, Trial: {trial_name}")
-    SR = []
-    for camera, results in exp_results_all.items():
-        success_rate = np.mean(results) * 100
-        SR.append(success_rate)
-        print(f"Camera: {camera}, Success Rate: {success_rate:.2f}%")
-    print(f'Average Success Rate: {np.mean(SR)}%')
-    
+
+    # save all results    
     exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
     os.makedirs(exp_save_dir, exist_ok=True)
     exp_results_all_save_fp = os.path.join(exp_save_dir, 'exp_results_all.pkl')
     save_pickle(exp_results_all_save_fp, exp_results_all)
-    # save the results
-    # if not args.no_save_result:
-    #     save_results_dir = "./outputs/{}/{}/exp_results/{}/".format(
-    #         task_name, args.method, get_time()
-    #     )
-    #     os.makedirs(save_results_dir, exist_ok=True)
-    #     save_results_path = os.path.join(save_results_dir, 'result.csv')
-    #     to_write = {
-    #         "ID": np.arange(len(exp_results)),
-    #         "scores": exp_results,
-    #     }
-    #     df = pd.DataFrame(to_write)
-    #     df = df.to_csv(save_results_path, mode="w", index=None)
+
+    # print simplified results
+    print('Experiment Results Summary:')
+    print(f"Task: {task_name}, Method: {method}")
+
+    success_rates = {}
+    for camera, results in exp_results_all.items():
+        success_rate = np.mean(results) * 100
+        success_rates[camera] = success_rate
+        print(f"{camera}: {success_rate:.2f}%")
+    
+    # Print average
+    avg_success_rate = np.mean(list(success_rates.values()))
+    print(f'Average: {avg_success_rate:.2f}%')
+    
+    # Save summary to CSV
+    if not args.no_save_result:
+        summary_save_fp = os.path.join(exp_save_dir, 'exp_results.csv')
+        summary_df = pd.DataFrame({
+            "camera": list(success_rates.keys()),
+            "success_rate": list(success_rates.values()),
+        })
+        summary_df.to_csv(summary_save_fp, index=False)
 
     print('Done')
     env.shutdown()
