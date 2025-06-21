@@ -3,10 +3,10 @@ import numpy as np
 import os 
 import cv2
 import matplotlib.pyplot as plt
-
+import json
 import open3d as o3d
 
-
+"test depth image backprojection and visualization for HZ inference"
 def backproject(depth, intrinsics, instance_mask, NOCS_convention=True):
     """backproject depth image to 3d points
     Args:
@@ -47,17 +47,37 @@ def visualize_points(points, colors=None):
     return pcd
 
 
-depth = cv2.imread('benchmark_obs/CloseDrawer/default/depth_000000.png', cv2.IMREAD_UNCHANGED)
+depth = cv2.imread('benchmark_dataset/CloseDrawer/default/depth_000000.png', cv2.IMREAD_UNCHANGED)
 depth = depth.astype(np.float32) / 1000.0
 
 camK = np.array([[626.42487143,   0.,         228.,        ],
             [  0.,         626.42487143, 128.,        ],
             [  0.,           0.,           1.,        ]])
 
-mask = cv2.imread('benchmark_obs/CloseDrawer/default/mask_000000.png', cv2.IMREAD_UNCHANGED)
+mask = cv2.imread('benchmark_dataset/CloseDrawer/default/mask_000000.png', cv2.IMREAD_UNCHANGED)
 mask = mask.astype(np.uint8)
 
 pts,_ = backproject(depth, camK, mask, NOCS_convention=False)
 pcd = visualize_points(pts, None) 
-o3d.visualization.draw_geometries([pcd])
+
+meta_data_fp = 'benchmark_dataset/CloseDrawer/default/meta_000000.json'
+with open(meta_data_fp, 'r') as f:
+    meta_data = json.load(f)
+
+
+contact_point = np.array(meta_data['contact_point'])
+T_cam_gripper = np.array(meta_data['T_cam_gripper']).reshape(4, 4)
+
+pt_vis = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+pt_vis.translate(contact_point)
+
+# Create coordinate system for gripper
+gripper_vis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05)
+gripper_vis.transform(T_cam_gripper)
+
+gripper_vis.paint_uniform_color([1, 0, 0])  # red
+world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+
+# Apply the transformation matrix to align with gripper pose
+o3d.visualization.draw_geometries([pcd, pt_vis, gripper_vis, world])
 breakpoint()
