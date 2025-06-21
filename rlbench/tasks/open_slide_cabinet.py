@@ -10,7 +10,7 @@ class OpenSlideCabinet(Task):
 
     def init_task(self):
         self.cabinet = Dummy('open_slide_cabinet')
-        self.cabinet.set_position([0.35, -0.1, 1.052])
+        self.cabinet.set_position([0.35, -0.05, 1.352])
         self.left_joint = Joint('left_joint')
         self.left_initial_waypoint = Dummy('waypoint0')
         self.left_close_waypoint = Dummy('waypoint1')
@@ -18,7 +18,7 @@ class OpenSlideCabinet(Task):
 
     def init_episode(self, index: int) -> List[str]:
         self.register_success_conditions(
-            [JointCondition(self.left_joint, 0.05),
+            [JointCondition(self.left_joint, 0.10),
                 NothingGrasped(self.robot.gripper)])
 
 

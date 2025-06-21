@@ -1,25 +1,23 @@
 from typing import List, Tuple
 from pyrep.objects.joint import Joint
-from pyrep.objects.dummy import Dummy
+from pyrep.objects.shape import Shape
 from rlbench.backend.task import Task
 from rlbench.backend.conditions import JointCondition, NothingGrasped
-
+import numpy as np
 
 
 class OpenCabinet(Task):
 
     def init_task(self):
-        self.cabinet = Dummy('open_cabinet')
-        # self.cabinet.set_position([0.25, 0.0, 0.752])
+        self.cabinet = Shape('cabinet')
+        self.cabinet.set_position([0.65,0,1.275])
         self.left_joint = Joint('cabinet_door_hinge_left')
-        self.left_initial_waypoint = Dummy('waypoint0')
-        self.left_close_waypoint = Dummy('waypoint1')
-        self.left_far_waypoint = Dummy('waypoint2')
+
 
 
     def init_episode(self, index: int) -> List[str]:
         self.register_success_conditions(
-            [JointCondition(self.left_joint, 0.5)])
+            [JointCondition(self.left_joint, np.deg2rad(30)),])
 
 
         return ['slide left cabinet open',
