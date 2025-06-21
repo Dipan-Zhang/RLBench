@@ -14,6 +14,8 @@ if __name__ == "__main__":
     parser.add_argument('--headless', action='store_true', help='run in headless mode')
     parser.add_argument('--DEBUG_VIS', action='store_true', help='visualize the motion in rlbench')
     parser.add_argument('--num_var', type=int, default=0, help='use variation')
+    parser.add_argument('--save_video', action='store_true', help='save video')
+    parser.add_argument('--dry', action='store_true', help='dry run, do not save results')
 
     args = parser.parse_args()
 
@@ -39,12 +41,19 @@ if __name__ == "__main__":
 
     elif args.task =='ablation_2D':
         TASKS = ABLATION_2D_TASK_LIST
+    elif args.task == 'ablation_2D_rest':
+        TASKS =[
+            'close_drawer', 
+            'close_slide_cabinet',
+            'down_toilet_seat', # oom need to be fixed  
+            'close_cabinet',
+        ]
     else:
         TASKS = [args.task]
 
     if args.task == 'ablation_var':
         SAVE_BASE_DIR = '../RLBench/outputs_ablation_var'
-    elif args.task == 'ablation_2D':
+    elif 'ablation_2D' in args.task:
         SAVE_BASE_DIR = '../RLBench/outputs_ablation_2D'
     else:
         SAVE_BASE_DIR = '../RLBench/outputs'
@@ -59,6 +68,10 @@ if __name__ == "__main__":
                 cmd += " --headless"
             if args.DEBUG_VIS:
                 cmd += " --DEBUG_VIS"
+            if args.save_video:
+                cmd += " --save_video"
+            if args.no_save_result:
+                cmd += " --dry"
             os.system(cmd)
         else:
             for var in range(args.num_var):

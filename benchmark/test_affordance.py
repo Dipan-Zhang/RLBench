@@ -357,16 +357,15 @@ def main(args, sim_cfg):
     else:
         raise ValueError('Invalid affordance method name')
     
-    video_camera = args.video_camera
     exp_results_all = {}
     for camera in camera_names:
         result_list = []
         for i in range(num_trial):
             print(f'Camera {camera}, Episode {i}')
             if args.save_video:
-                image_save_dir = "./outputs/{}/exp_results/{}/{}/video_{}/obs_{}/trial_{}".format(
-                    taskName, method, trial_name, video_camera, camera, i
-                )
+                image_save_dir = os.path.join(SAVE_ROOT, "exp_video/obs_{}/trial_{}".format(
+                    camera, i
+                ))
                 os.makedirs(image_save_dir, exist_ok=True)
 
             if method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
@@ -513,10 +512,9 @@ if __name__ == '__main__':
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
     parser.add_argument('--save_video', action='store_true', help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
-    parser.add_argument('--no_save_result', type=bool, default=False, help='whether to save images')
+    parser.add_argument('--no_save_result', action='store_true', help='whether to save images')
     parser.add_argument('--scale', type=float, default=1.5, help='scale factor for trajectory')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
-    parser.add_argument('--video_camera', type=str, default='front', help='camera name for video')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
     parser.add_argument('--DEBUG_VIS', action='store_true')
     parser.add_argument('--headless', action='store_true')
