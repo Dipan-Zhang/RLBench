@@ -18,7 +18,9 @@ import torch.nn.functional as F
 import ipdb
 from benchmark.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
 import pickle
-
+from scipy.spatial.transform import Rotation as Rot
+from scipy.spatial.transform import Slerp
+from scipy.signal import savgol_filter
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -339,3 +341,67 @@ def get_time():
     import time
     curr_time = time.strftime("%Y-%m-%d-%H-%M")
     return curr_time
+
+
+def smooth_trajectory(poses, max_translation_step=0.01, max_rotation_deg=2.0):
+    """
+    Interpolates a trajectory of SE(3) poses to ensure smooth translation and rotation.
+    Args:
+        poses: (N, 7) array of [x, y, z, qx, qy, qz, qw]
+        max_translation_step: maximum translation (meters) between waypoints
+        max_rotation_deg: maximum rotation (degrees) between waypoints
+    Returns:
+        (M, 7) array of smoothed poses
+    """
+    smoothed = [poses[0]]
+    for i in range(len(poses) - 1):
+        p0, p1 = poses[i], poses[i+1]
+        t0, t1 = p0[:3], p1[:3]
+        r0, r1 = Rot.from_quat(p0[3:]), Rot.from_quat(p1[3:])
+        
+        # Compute translation and rotation difference
+        trans_dist = np.linalg.norm(t1 - t0)
+        rot_dist = r0.inv() * r1
+        rot_angle = np.degrees(np.linalg.norm(rot_dist.as_rotvec()))
+        
+        # Number of steps needed for translation and rotation
+        n_trans = int(np.ceil(trans_dist / max_translation_step))
+        n_rot = int(np.ceil(rot_angle / max_rotation_deg))
+        n_steps = max(n_trans, n_rot, 1)
+        
+        # Interpolate
+        if n_steps > 1:
+            times = np.linspace(0, 1, n_steps+1)[1:]  # skip 0, include 1
+            slerp = Slerp([0, 1], Rot.from_quat([p0[3:], p1[3:]]))
+            for t in times:
+                interp_pos = (1-t) * t0 + t * t1
+                interp_rot = slerp([t])[0].as_quat()
+                smoothed.append(np.concatenate([interp_pos, interp_rot]))
+        else:
+            smoothed.append(p1)
+    return np.array(smoothed)
+
+
+def smooth_pose_sequence(poses, window_length=11, polyorder=3):
+    """
+    Smooths a sequence of SE(3) poses using Savitzky-Golay filter.
+    Args:
+        poses: (N, 7) array of [x, y, z, qx, qy, qz, qw]
+        window_length: length of the filter window (must be odd and <= N)
+        polyorder: order of the polynomial used to fit the samples
+    Returns:
+        (N, 7) array of smoothed poses
+    """
+    poses = np.array(poses)
+    N = poses.shape[0]
+    if N < window_length:
+        window_length = N if N % 2 == 1 else N-1
+    # Smooth translation
+    smoothed_xyz = savgol_filter(poses[:, :3], window_length, polyorder, axis=0)
+    # Smooth rotation (convert to rotvec, smooth, convert back)
+    rots = Rot.from_quat(poses[:, 3:])
+    rotvecs = rots.as_rotvec()
+    smoothed_rotvecs = savgol_filter(rotvecs, window_length, polyorder, axis=0)
+    smoothed_rots = Rot.from_rotvec(smoothed_rotvecs)
+    smoothed_quat = smoothed_rots.as_quat()
+    return np.hstack([smoothed_xyz, smoothed_quat])

@@ -1,11 +1,14 @@
-import numpy as np
-import ipdb
-import cv2
-import matplotlib.pyplot as plt # for debugging
-import open3d as o3d
 import copy
+import importlib
+import os
+import pandas as pd
+import numpy as np
+import open3d as o3d
+from typing import List, Tuple
+import ipdb
+import matplotlib.pyplot as plt # for debugging
 from omegaconf import OmegaConf
-import torch
+from scipy.spatial.transform import Rotation as Rot
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, EndEffectorPoseViaIK
@@ -13,8 +16,6 @@ from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.backend.exceptions import InvalidActionError
 from tools.cinematic_recorder import FixedCameraMotion, TaskRecorder
-
-from pyrep.errors import ConfigurationPathError
 from pyrep.objects import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
 
@@ -28,20 +29,17 @@ from benchmark.helpers import (
                         apply_motion_plan,
                         underscore_string_to_camel_case,
                         scale_abs_trajectory,
+                        smooth_trajectory,
+                        smooth_pose_sequence
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
-from scipy.spatial.transform import Rotation as Rot
-from scipy.spatial.transform import Slerp
 
 from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
           adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
           get_pcd_with_color
-import importlib
-import os
-import pandas as pd
-from typing import List, Tuple
+
 
 def transform_motion_plan(motion_plan, T_cam_obj):
     """
@@ -137,7 +135,8 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
     # Check if we've reached the current waypoint
     if distance < distance_threshold:
         old_idx = trajectory_idx
-        print(f'Waypoint {old_idx} reached. Distance: {distance:.4f}')
+        if old_idx % 10 == 0:
+            print(f'Waypoint {old_idx} reached. Distance: {distance:.4f}')
         # If we reached the end of trajectory
         if trajectory_idx >= len(actions):
             print("✓ Complete trajectory executed successfully!")
@@ -154,7 +153,7 @@ def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):
             fallback_action[:3] += direction * 0.01 / np.linalg.norm(direction)
         return fallback_action
 
-def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
+def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, th=0.08, vis=False):
     """Plan smooth gripper trajectory based on motion plan"""
     current_gripper_pose = copy.deepcopy(obs.gripper_pose[:7])
     
@@ -167,8 +166,8 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
     
     post_gripper_matrices = scale_abs_trajectory(
         post_gripper_matrices, scale=scale)
+
     # Convert post-gripper matrices to poses
-    
     post_gripper_poses = []
     for i in range(len(post_gripper_matrices)):
         post_gripper_pose = post_gripper_matrices[i]
@@ -176,13 +175,20 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
         post_gripper_translation = post_gripper_pose[:3, 3] 
         post_gripper_poses.append(np.concatenate([post_gripper_translation, post_gripper_rotation.as_quat()]))
     
+    # After you have post_gripper_poses as a (N, 7) array:
+    post_gripper_poses = smooth_trajectory(post_gripper_poses, max_translation_step=0.008, max_rotation_deg=1.0)
+    # post_gripper_poses = smooth_pose_sequence(post_gripper_poses, window_length=11, polyorder=3)
+    
     # vis unsmooothed trajectory
     current_pts = obs.left_shoulder_point_cloud
     current_pcd = visualize_points(current_pts.reshape(-1, 3))
     action_vis = []
     for i in range(len(post_gripper_poses)):
-        action_vis.append(vis_pose(post_gripper_poses[i][:3], 
-                        Rot.from_quat(post_gripper_poses[i][3:7]).as_matrix(), size=0.08))
+        action_vis.append(
+                    vis_pose(post_gripper_poses[i][:3], 
+                    Rot.from_quat(post_gripper_poses[i][3:7]).as_matrix(), 
+                    size=0.08)
+                    )
     world = o3d.geometry.TriangleMesh.create_coordinate_frame(
         size=0.1, origin=[0,0,0])
     plan_trajectory = visualize_3d_trajectory(
@@ -203,70 +209,18 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
         point_cloud_save_fn = traj_save_fn.replace('.ply', '_pcd.ply')
         o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
     
-    # Process the motion plan with smooth interpolation
-    interpolated_poses = []
-            
-    # If we already have poses, make sure they're properly smoothed
-    if len(post_gripper_poses) > 1:
-        # Add the first pose
-        interpolated_poses.append(post_gripper_poses[0])
-        
-        # For each consecutive pair of poses
-        for i in range(len(post_gripper_poses) - 1):
-            current_pose = post_gripper_poses[i]
-            next_pose = post_gripper_poses[i+1]
-            
-            # Calculate distance between poses
-            translation_diff = next_pose[:3] - current_pose[:3]
-            translation_norm = np.linalg.norm(translation_diff)
-            
-            max_step_distance = 0.03
-            
-            if translation_norm > max_step_distance:
-                steps = int(np.ceil(translation_norm / max_step_distance))
-                
-                # Create rotation keypoints for Slerp
-                current_rot = Rot.from_quat(current_pose[3:7])
-                next_rot = Rot.from_quat(next_pose[3:7])
-                
-                key_rots = Rot.from_quat([current_rot.as_quat(), next_rot.as_quat()])
-                key_times = [0, 1]
-                
-                # Create the Slerp object for rotation interpolation
-                slerp = Slerp(key_times, key_rots)
-                
-                for step in range(1, steps):
-                    step_fraction = step / steps
-                    step_pos = current_pose[:3] + translation_diff * step_fraction
-                    step_rot = slerp([step_fraction])[0]
-                    step_quat = step_rot.as_quat()
-                    interpolated_poses.append(np.concatenate([step_pos, step_quat]))
-                
-                # Add the final pose in this segment
-                interpolated_poses.append(next_pose)
-            else:
-                # Small enough translation, add directly
-                interpolated_poses.append(next_pose)
-        
-        # Replace with interpolated poses
-        post_gripper_poses = interpolated_poses
-        print(f"Smoothed trajectory from {len(motion_plan_world)} steps to {len(post_gripper_poses)} steps")
-    
-    if len(post_gripper_poses) == 0:
-        print("WARNING: No valid poses generated from motion plan!")
-        return
     # Stack poses and add gripper state (open)
-    post_gripper_poses = np.stack(post_gripper_poses)
+    interpolated_poses = np.stack(post_gripper_poses)
     # Add gripper state (ones for open)
-    post_gripper_poses = np.concatenate(
-        [post_gripper_poses, np.zeros((post_gripper_poses.shape[0], 1))], 
+    interpolated_poses = np.concatenate(
+        [interpolated_poses, np.zeros((interpolated_poses.shape[0], 1))], 
         axis=1)
     
-    # add noise to avoid devide by zero
-    noise = np.random.normal(0, 0.005, post_gripper_poses.shape)
-    post_gripper_poses[:, :3] += noise[:, :3]
+    # # add noise to avoid devide by zero
+    noise = np.random.normal(0, 1e-4, interpolated_poses.shape)
+    interpolated_poses[:, :3] += noise[:, :3]
 
-    actions = post_gripper_poses
+    actions = interpolated_poses
     print(f'Generated {len(actions)} action steps from motion plan')
     
     current_pts = obs.left_shoulder_point_cloud
@@ -279,7 +233,7 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, vis=False):
     world = o3d.geometry.TriangleMesh.create_coordinate_frame(
         size=0.1, origin=[0,0,0])
     plan_trajectory = visualize_3d_trajectory(
-        post_gripper_poses[:, :3], size=0.02, 
+        interpolated_poses[:, :3], size=0.02, 
         cmap_name="plasma", invert=False)
     if vis:
         o3d.visualization.draw_geometries(
@@ -427,7 +381,7 @@ def main(args, sim_cfg):
                 actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, smooth=False, vis=DEBUG_VIS)
 
 
-            episode_length = len(actions)+5
+            episode_length = len(actions)+10
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
@@ -452,7 +406,7 @@ def main(args, sim_cfg):
                 if reward:
                     result = 1
             else:
-                print('Task Timeout!')
+                print('Task Timeout....')
                 result = 0
             
             result_list.append(result)
@@ -494,7 +448,7 @@ def main(args, sim_cfg):
     
     # Save summary to CSV
     if not args.no_save_result:
-        summary_save_fp = os.path.join(exp_save_dir, 'exp_results.csv')
+        summary_save_fp = os.path.join(exp_save_dir, 'exp_results_all.csv')
         summary_df = pd.DataFrame({
             "camera": list(success_rates.keys()),
             "success_rate": list(success_rates.values()),
