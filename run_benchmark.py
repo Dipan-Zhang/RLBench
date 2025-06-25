@@ -8,9 +8,10 @@ from omegaconf import OmegaConf
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--task', type=str, default='all', help='task name')
-    parser.add_argument('--method', type=str, default='ours', help='method name' )
+    parser.add_argument('--method', type=str, default='ours', help='method name')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
+    parser.add_argument('--save_dir', type=str, default='./outputs', help='directory of data saved by our method') 
     parser.add_argument('--headless', action='store_true', help='run in headless mode')
     parser.add_argument('--DEBUG_VIS', action='store_true', help='visualize the motion in rlbench')
     parser.add_argument('--num_var', type=int, default=0, help='use variation')
@@ -18,6 +19,9 @@ if __name__ == "__main__":
     parser.add_argument('--dry', action='store_true', help='dry run, do not save results')
 
     args = parser.parse_args()
+
+    SAVE_BASE_DIR = args.save_dir
+    print(f"Run Benchmark from: {SAVE_BASE_DIR}")
 
     method = args.method
     sim_cfg_fp = args.sim_config_fp
@@ -33,7 +37,7 @@ if __name__ == "__main__":
     elif args.task == 'articulate':
         TASKS = TASK_LIST_ARTICULATE
     elif args.task == 'flex':
-        TASKS = ['down_toilet_seat', 'close_laptop']
+        TASKS = ['close_drawer', 'close_cabinet', 'close_laptop']
     elif args.task == 'bechmarkv1_rest':
         TASKS = ['open_drawer', 'close_microwave', 'open_slide_cabinet', 'close_slide_cabinet', 'close_cabinet']
     elif args.task == 'ablation_multiple_goal_rest':
@@ -51,12 +55,6 @@ if __name__ == "__main__":
     else:
         TASKS = [args.task]
 
-    if args.task == 'ablation_var':
-        SAVE_BASE_DIR = '../RLBench/outputs_ablation_var'
-    elif 'ablation_2D' in args.task:
-        SAVE_BASE_DIR = '../RLBench/outputs_ablation_2D'
-    else:
-        SAVE_BASE_DIR = '../RLBench/outputs'
 
     for task in tqdm(TASKS):
         print(f"====================Task: {task}=====================")
@@ -70,8 +68,8 @@ if __name__ == "__main__":
                 cmd += " --DEBUG_VIS"
             if args.save_video:
                 cmd += " --save_video"
-            if args.no_save_result:
-                cmd += " --dry"
+            if args.dry:
+                cmd += " --no_save_result"
             os.system(cmd)
         else:
             for var in range(args.num_var):
