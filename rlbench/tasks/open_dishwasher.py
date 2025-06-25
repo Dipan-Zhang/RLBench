@@ -14,7 +14,7 @@ class OpenDishwasher(Task):
         self._dishwasher.set_position([0.25, -0.1, 0.752])
         self._dishwasher.set_orientation([0, 0, -80])
         self.register_success_conditions([JointCondition(
-                    Joint('dishwasher_door_joint'), np.deg2rad(30))])
+                    Joint('dishwasher_door_joint'), np.deg2rad(40))])
 
     def init_episode(self, index: int) -> List[str]:
         return ['open the  dishwasher door',

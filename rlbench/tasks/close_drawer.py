@@ -21,9 +21,9 @@ class CloseDrawer(Task):
     def init_episode(self, index: int) -> List[str]:
         self._joints[index].set_joint_position(0.1)
         option = self._options[index]
-        self._waypoint1.set_position(self._anchors[index].get_position())
+        self._waypoint1.set_position(self._anchors[index].get_position()) # hard code without condersing orientation
         self.register_success_conditions(
-            [JointCondition(self._joints[index], 0.1)])
+            [JointCondition(self._joints[index], 0.085)])
 
         return ['close %s drawer' % (option,),
                 'shut the %s drawer' % (option,),
