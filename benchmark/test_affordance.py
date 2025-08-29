@@ -15,7 +15,7 @@ from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, En
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.backend.exceptions import InvalidActionError
-from tools.cinematic_recorder import FixedCameraMotion, TaskRecorder
+from tools.cinematic_recorder import CircleCameraMotion, TaskRecorder, FixedCameraMotion
 from pyrep.objects import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
 
@@ -274,10 +274,13 @@ def main(args, sim_cfg):
 
     if args.save_video:
         cam_placeholder = Dummy('cam_cinematic_placeholder')
+        cam_over_shoulder_right = VisionSensor('cam_overhead')
+        cam_placeholder.set_pose(cam_over_shoulder_right.get_pose())
         cam = VisionSensor.create([1280, 720])
         cam.set_pose(cam_placeholder.get_pose())
         cam.set_parent(cam_placeholder)
-        cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
+        # cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
+        cam_motion = CircleCameraMotion(cam, Dummy('cam_cinematic_base'), 0.015)
         tr = TaskRecorder(env, cam_motion, fps=30)
     
 
@@ -427,33 +430,34 @@ def main(args, sim_cfg):
         exp_results_all[camera] = result_list
 
     # save all results    
-    exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
-    os.makedirs(exp_save_dir, exist_ok=True)
-    exp_results_all_save_fp = os.path.join(exp_save_dir, 'exp_results_all.pkl')
-    save_pickle(exp_results_all_save_fp, exp_results_all)
-
-    # print simplified results
-    print('Experiment Results Summary:')
-    print(f"Task: {task_name}, Method: {method}")
-
-    success_rates = {}
-    for camera, results in exp_results_all.items():
-        success_rate = np.mean(results) * 100
-        success_rates[camera] = success_rate
-        print(f"{camera}: {success_rate:.2f}%")
-    
-    # Print average
-    avg_success_rate = np.mean(list(success_rates.values()))
-    print(f'Average: {avg_success_rate:.2f}%')
-    
-    # Save summary to CSV
     if not args.no_save_result:
-        summary_save_fp = os.path.join(exp_save_dir, 'exp_results_all.csv')
-        summary_df = pd.DataFrame({
-            "camera": list(success_rates.keys()),
-            "success_rate": list(success_rates.values()),
-        })
-        summary_df.to_csv(summary_save_fp, index=False)
+        exp_save_dir = os.path.join(SAVE_ROOT, 'exp_results')
+        os.makedirs(exp_save_dir, exist_ok=True)
+        exp_results_all_save_fp = os.path.join(exp_save_dir, 'exp_results_all.pkl')
+        save_pickle(exp_results_all_save_fp, exp_results_all)
+
+        # print simplified results
+        print('Experiment Results Summary:')
+        print(f"Task: {task_name}, Method: {method}")
+
+        success_rates = {}
+        for camera, results in exp_results_all.items():
+            success_rate = np.mean(results) * 100
+            success_rates[camera] = success_rate
+            print(f"{camera}: {success_rate:.2f}%")
+        
+        # Print average
+        avg_success_rate = np.mean(list(success_rates.values()))
+        print(f'Average: {avg_success_rate:.2f}%')
+        
+        # Save summary to CSV
+        if not args.no_save_result:
+            summary_save_fp = os.path.join(exp_save_dir, 'exp_results_all.csv')
+            summary_df = pd.DataFrame({
+                "camera": list(success_rates.keys()),
+                "success_rate": list(success_rates.values()),
+            })
+            summary_df.to_csv(summary_save_fp, index=False)
 
     print('Done')
     env.shutdown()
