@@ -397,7 +397,7 @@ def main(args, sim_cfg):
                     # # o3d.visualization.draw_geometries([before_pcd])
                     # ipdb.set_trace()
 
-                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task) # overhead, left_shoulder, right_shoulder
+                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task, mask_object_names=['microwave_door', 'microwave_frame_vis']) #! TEMP fix, hardcoded object naems
                     pcd = visualize_points(points_cloud_without_robot)
                     o3d.visualization.draw_geometries([pcd])
 

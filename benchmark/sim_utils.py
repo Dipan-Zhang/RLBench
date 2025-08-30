@@ -1055,7 +1055,7 @@ CAMERA_POSES_HZ = {
 
 
 }
-    
+
 
 def change_robot_renderability(robot_names=['Panda'], task=None):
     """
@@ -1136,7 +1136,7 @@ def change_robot_renderability(robot_names=['Panda'], task=None):
     
     return visual_objects, restore_robot
 
-def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_overhead', task=None):
+def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_overhead', task=None, mask_object_names=None):
     """
     Get clean point cloud without robot occlusion by temporarily hiding the robot.
     
@@ -1145,7 +1145,7 @@ def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_over
         obs: Observation object
         camera_name: Name of the camera to use
         task: Task object to refresh observation (required for getting new point cloud)
-    
+        mask_object_names: List of object names to mask
     Returns:
         clean_point_cloud: (N, 3) array of 3D points without robot occlusion
     """
@@ -1171,6 +1171,16 @@ def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_over
         # Get the point cloud from the specified camera
         if hasattr(obs, f'{obs_arrtibute_name}_point_cloud'):
             point_cloud = getattr(obs, f'{obs_arrtibute_name}_point_cloud')
+
+            if mask_object_names is not None:
+                mask = getattr(obs, f'{obs_arrtibute_name}_mask')
+                mask_uint8 = (mask).astype(np.uint8)
+
+                obj_mask = np.zeros_like(mask_uint8)
+                for object_name in mask_object_names:
+                    obj_mask = obj_mask | (mask_uint8 == Object.get_object(object_name).get_handle())
+            point_cloud = point_cloud[obj_mask > 0]
+
         else:
             print(f"No point cloud found in observation for {obs_arrtibute_name}, double check camera name")
             point_cloud = None
