@@ -38,7 +38,7 @@ from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_pos
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
           adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
-          get_pcd_with_color
+          get_pcd_with_color, get_clean_point_cloud
 
 
 def transform_motion_plan(motion_plan, T_cam_obj):
@@ -390,6 +390,18 @@ def main(args, sim_cfg):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 try:
                     obs, reward, terminate = task.step(action)
+               
+                    # ipdb.set_trace()
+                    # # before_pts = obs.left_shoulder_point_cloud
+                    # # before_pcd = visualize_points(before_pts.reshape(-1, 3))
+                    # # o3d.visualization.draw_geometries([before_pcd])
+                    # ipdb.set_trace()
+
+                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task) # overhead, left_shoulder, right_shoulder
+                    pcd = visualize_points(points_cloud_without_robot)
+                    o3d.visualization.draw_geometries([pcd])
+
+
                 except InvalidActionError as e:
                     print(f"Invalid action: {e} \n Cancel this trial")
                     break
@@ -469,6 +481,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--task_name', type=str, default='pick_up_bottle', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='affordance method name')
     parser.add_argument('--save_video', action='store_true', help='whether to save video')
+    parser.add_argument('--save_obj_pc', action='store_true', help='whether to save object point cloud')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', action='store_true', help='whether to save images')
     parser.add_argument('--scale', type=float, default=1.5, help='scale factor for trajectory')

@@ -36,6 +36,7 @@ from scipy.spatial.transform import Slerp
 import copy
 import transforms3d as t3d
 from pyrep.objects.vision_sensor import VisionSensor
+from pyrep.objects import Object
 
 
 # figure out how to parse target name??
@@ -536,7 +537,7 @@ def create_obs_config(camera_names: List[str],
     used_cams = CameraConfig(
         rgb=True,
         point_cloud=True,
-        mask=False,
+        mask=True,
         depth=True,
         depth_in_meters=True,
         image_size=camera_resolution,
@@ -1054,3 +1055,134 @@ CAMERA_POSES_HZ = {
 
 
 }
+    
+
+def change_robot_renderability(robot_names=['Panda'], task=None):
+    """
+    Temporarily hide the robot to capture clean observation without robot occlusion.
+    Uses PyRep's built-in get_visuals() method to find and hide robot visual objects.
+    Returns the modified observation and a function to restore the robot.
+    """
+    visual_objects = []
+    
+    # Store original renderability states
+    original_states = {}
+    
+    # Get robot from task if available
+    if task is not None and hasattr(task, '_scene') and hasattr(task._scene, 'robot'):
+        robot = task._scene.robot
+        print(f"Processing robot from task scene")
+        
+        try:
+            # Get visual objects from robot arm
+            if hasattr(robot, 'arm') and hasattr(robot.arm, 'get_visuals'):
+                arm_visuals = robot.arm.get_visuals()
+                visual_objects.extend(arm_visuals)
+                print(f"Found {len(arm_visuals)} arm visual objects")
+            
+            # Get visual objects from robot gripper
+            if hasattr(robot, 'gripper') and hasattr(robot.gripper, 'get_visuals'):
+                gripper_visuals = robot.gripper.get_visuals()
+                visual_objects.extend(gripper_visuals)
+                print(f"Found {len(gripper_visuals)} gripper visual objects")
+                
+        except Exception as e:
+            print(f"Error getting robot visuals: {e}")
+    
+    # Fallback: try to find robot objects by name if task approach fails
+    if len(visual_objects) == 0:
+        print("Fallback: searching for robot objects by name")
+        for name in robot_names:
+            try:
+                obj = Object.get_object(name)
+                if obj is not None:
+                    print(f"Found robot object: {name}")
+                    # Try to get children and find visual objects
+                    if hasattr(obj, 'get_children'):
+                        children = obj.get_children()
+                        for child in children:
+                            if hasattr(child, 'is_renderable'):
+                                visual_objects.append(child)
+                                print(f"Added child object: {child.get_name() if hasattr(child, 'get_name') else 'unnamed'}")
+            except Exception as e:
+                print(f"Error getting robot object {name}: {e}")
+                continue
+    
+    # Hide all found visual objects
+    for obj in visual_objects:
+        try:
+            obj_name = obj.get_name() if hasattr(obj, 'get_name') else 'unnamed'
+            original_states[obj_name] = {
+                'renderable': obj.is_renderable()
+            }
+            obj.set_renderable(False)
+            print(f"Hidden visual object: {obj_name}")
+        except Exception as e:
+            print(f"Error hiding object: {e}")
+    
+    print(f"Found and hidden {len(visual_objects)} visual objects")
+    
+    def restore_robot():
+        """Restore robot visibility and renderability"""
+        restored_count = 0
+        for obj_name, states in original_states.items():
+            try:
+                obj = Object.get_object(obj_name)
+                obj.set_renderable(states['renderable'])
+                restored_count += 1
+            except Exception as e:
+                print(f"Error restoring object: {e}")
+        print(f"Restored {restored_count} visual objects")
+    
+    return visual_objects, restore_robot
+
+def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_overhead', task=None):
+    """
+    Get clean point cloud without robot occlusion by temporarily hiding the robot.
+    
+    Args:
+        robot_names: List of robot object names to hide
+        obs: Observation object
+        camera_name: Name of the camera to use
+        task: Task object to refresh observation (required for getting new point cloud)
+    
+    Returns:
+        clean_point_cloud: (N, 3) array of 3D points without robot occlusion
+    """
+    # Temporarily hide robot
+    robot_objects, restore_robot = change_robot_renderability(robot_names=robot_names, task=task)
+    
+    try:
+        # Refresh observation to get new point cloud without robot
+        if task is not None:
+            obs = task.get_observation()
+            print("Refreshed observation after hiding robot")
+        
+        # convert camera name to attribute name
+        if 'shoulder_left' in camera_name:
+            obs_arrtibute_name = 'left_shoulder'
+        elif 'shoulder_right' in camera_name:
+            obs_arrtibute_name = 'right_shoulder'
+        elif 'overhead' in camera_name:
+            obs_arrtibute_name = 'overhead'
+        else:
+            raise ValueError('Invalid camera name')
+        
+        # Get the point cloud from the specified camera
+        if hasattr(obs, f'{obs_arrtibute_name}_point_cloud'):
+            point_cloud = getattr(obs, f'{obs_arrtibute_name}_point_cloud')
+        else:
+            print(f"No point cloud found in observation for {obs_arrtibute_name}, double check camera name")
+            point_cloud = None
+        
+        # Reshape and return
+        if point_cloud is not None:
+            point_cloud = point_cloud.reshape(-1, 3)
+            print(f"Captured clean point cloud from {obs_arrtibute_name}: {len(point_cloud)} points")
+            return point_cloud
+        else:
+            return np.array([])
+            
+    finally:
+        # Always restore robot visibility
+        restore_robot()
