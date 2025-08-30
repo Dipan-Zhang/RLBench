@@ -705,6 +705,24 @@ def visualize_pointcloud(demo_pcd, target_pcd, T_o1c1, T_c2o1):
 
     o3d.visualization.draw_geometries([target_pcd_vis, demo_pcd_vis, c1_axis, c2_axis, world_axis]) 
 
+def downsample_pcd(pcd, n_target=1500):
+    # Downsample adaptively to get exactly 1500 points
+    n_target = 1500
+    voxel_size = 0.01
+    object_pcd_downsampled = pcd.voxel_down_sample(voxel_size=voxel_size)
+    
+    # Randomly sample remaining points if needed
+    points = np.asarray(object_pcd_downsampled.points)
+    if len(points) > n_target:
+        indices = np.random.choice(len(points), n_target, replace=False)
+        points = points[indices]
+    elif len(points) < n_target:
+        # Repeat points if we have too few
+        indices = np.random.choice(len(points), n_target - len(points))
+        points = np.concatenate([points, points[indices]])
+    downsampled_pcd = visualize_points(points)
+    return downsampled_pcd
+
 def visualize_affordance_with_scene(target_pcd, affordance_c2, corres_3d_c2):
     "visualize transferred affordance in target frame, scale = render scale or real scale"
     sphere_c2 = o3d.geometry.TriangleMesh.create_sphere(radius=0.005)
@@ -1078,13 +1096,13 @@ def change_robot_renderability(robot_names=['Panda'], task=None):
             if hasattr(robot, 'arm') and hasattr(robot.arm, 'get_visuals'):
                 arm_visuals = robot.arm.get_visuals()
                 visual_objects.extend(arm_visuals)
-                print(f"Found {len(arm_visuals)} arm visual objects")
+                # print(f"Found {len(arm_visuals)} arm visual objects")
             
             # Get visual objects from robot gripper
             if hasattr(robot, 'gripper') and hasattr(robot.gripper, 'get_visuals'):
                 gripper_visuals = robot.gripper.get_visuals()
                 visual_objects.extend(gripper_visuals)
-                print(f"Found {len(gripper_visuals)} gripper visual objects")
+                # print(f"Found {len(gripper_visuals)} gripper visual objects")
                 
         except Exception as e:
             print(f"Error getting robot visuals: {e}")
@@ -1096,14 +1114,14 @@ def change_robot_renderability(robot_names=['Panda'], task=None):
             try:
                 obj = Object.get_object(name)
                 if obj is not None:
-                    print(f"Found robot object: {name}")
+                    # print(f"Found robot object: {name}")
                     # Try to get children and find visual objects
                     if hasattr(obj, 'get_children'):
                         children = obj.get_children()
                         for child in children:
                             if hasattr(child, 'is_renderable'):
                                 visual_objects.append(child)
-                                print(f"Added child object: {child.get_name() if hasattr(child, 'get_name') else 'unnamed'}")
+                                # print(f"Added child object: {child.get_name() if hasattr(child, 'get_name') else 'unnamed'}")
             except Exception as e:
                 print(f"Error getting robot object {name}: {e}")
                 continue
@@ -1116,11 +1134,11 @@ def change_robot_renderability(robot_names=['Panda'], task=None):
                 'renderable': obj.is_renderable()
             }
             obj.set_renderable(False)
-            print(f"Hidden visual object: {obj_name}")
+            # print(f"Hidden visual object: {obj_name}")
         except Exception as e:
             print(f"Error hiding object: {e}")
     
-    print(f"Found and hidden {len(visual_objects)} visual objects")
+    # print(f"Found and hidden {len(visual_objects)} visual objects")
     
     def restore_robot():
         """Restore robot visibility and renderability"""

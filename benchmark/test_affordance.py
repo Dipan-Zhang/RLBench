@@ -38,7 +38,7 @@ from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_pos
       convert_camera_name, draw_trajectory, interpolate_trajectory,\
           get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
           adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
-          get_pcd_with_color, get_clean_point_cloud
+          get_pcd_with_color, get_clean_point_cloud, downsample_pcd
 
 
 def transform_motion_plan(motion_plan, T_cam_obj):
@@ -384,23 +384,19 @@ def main(args, sim_cfg):
                 actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, smooth=False, vis=DEBUG_VIS)
 
 
+            object_flows = []
+            mask_object_names = ['microwave_door']
             episode_length = len(actions)+10
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 try:
                     obs, reward, terminate = task.step(action)
-               
-                    # ipdb.set_trace()
-                    # # before_pts = obs.left_shoulder_point_cloud
-                    # # before_pcd = visualize_points(before_pts.reshape(-1, 3))
-                    # # o3d.visualization.draw_geometries([before_pcd])
-                    # ipdb.set_trace()
-
-                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task, mask_object_names=['microwave_door', 'microwave_frame_vis']) #! TEMP fix, hardcoded object naems
-                    pcd = visualize_points(points_cloud_without_robot)
-                    o3d.visualization.draw_geometries([pcd])
-
+                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task, mask_object_names=mask_object_names) #! TEMP fix, hardcoded object naems
+                    object_pcd = visualize_points(points_cloud_without_robot)
+                    downsampled_pcd = downsample_pcd(object_pcd)
+                    object_flows.append(downsampled_pcd.points)
+                    print(f"Object flow: {len(downsampled_pcd.points)} points")
 
                 except InvalidActionError as e:
                     print(f"Invalid action: {e} \n Cancel this trial")
@@ -423,6 +419,15 @@ def main(args, sim_cfg):
             else:
                 print('Task Timeout....')
                 result = 0
+
+            # save object flows after task ends
+            object_flows = np.stack(object_flows).transpose(1, 0, 2) # to N, T, 3
+            flow_dict = {
+                "result": result,
+                "object_flows": object_flows,
+            }
+            object_flows_save_fn = os.path.join(SAVE_ROOT, camera, f'trial_{i}', 'object_flows.npz')
+            np.savez(object_flows_save_fn, **flow_dict)
             
             result_list.append(result)
 
