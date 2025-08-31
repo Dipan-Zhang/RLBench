@@ -34,11 +34,18 @@ from benchmark.helpers import (
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 
-from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
-      convert_camera_name, draw_trajectory, interpolate_trajectory,\
-          get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
-          adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
-          get_pcd_with_color, get_clean_point_cloud, downsample_pcd
+from benchmark.sim_utils import (
+            create_obs_config, vis_pose, compute_gripper_poses,
+            convert_camera_name, draw_trajectory, interpolate_trajectory,
+            get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position,
+            adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl,
+            get_pcd_with_color, get_clean_point_cloud, downsample_pcd, pick_points_in_viewer
+)
+
+
+# TODO: smoothen the flow (optional) and then traininig
+# TODO: test the resulted flows, is it better than orginal ones?
+# TODO: think of close the loop: QUT paper + flow as cross domain interface
 
 
 def transform_motion_plan(motion_plan, T_cam_obj):
@@ -340,6 +347,7 @@ def main(args, sim_cfg):
 
             if method == 'ours':
                 motion_plan_c2 = motion_data[camera][i]['motion_plan']
+                T_c2o = motion_data[camera][i]['T_c2o_optimized']
                 # convert the motion plan from c2 to world frame
                 T_world_cam = get_T_world_cam_gl(obs, camera)
                 motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
@@ -385,18 +393,42 @@ def main(args, sim_cfg):
 
 
             object_flows = []
-            mask_object_names = ['microwave_door']
+            mask_object_names = ['microwave_door_resp']
             episode_length = len(actions)+10
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 try:
                     obs, reward, terminate = task.step(action)
-                    points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task, mask_object_names=mask_object_names) #! TEMP fix, hardcoded object naems
-                    object_pcd = visualize_points(points_cloud_without_robot)
-                    downsampled_pcd = downsample_pcd(object_pcd)
-                    object_flows.append(downsampled_pcd.points)
-                    print(f"Object flow: {len(downsampled_pcd.points)} points")
+                    # sample points from shape in mask_object_names
+                    for obj_name in mask_object_names:
+                        # from pyrep.objects.object import Object
+                        from pyrep.objects.shape import Shape
+                        obj = Shape.get_object(obj_name)
+                        verts, faces, normals = obj.get_mesh_data() # in own frame
+
+                        #! TEMP Hardcoded, selecting the surface that we want to sample from
+                        # sample a grid of points on the surface
+                        sampled_points = []
+                        x_coordinates =  0.00839232
+                        y_range = [-0.10809416, 0.13200484]
+                        z_range = [-0.22315015, 0.22799721]
+                        y_coordinates = np.linspace(y_range[0], y_range[1], 20)
+                        z_coordinates = np.linspace(z_range[0], z_range[1], 20)
+                        for y in y_coordinates:
+                            for z in z_coordinates:
+                                x_coordinates = x_coordinates
+                                sampled_points.append(np.array([x_coordinates, y, z]))
+                        sampled_points = np.array(sampled_points)
+                        #! END TEMP HARDCODED
+                        
+                        # convert to world frame
+                        T_world_obj = obj.get_matrix()
+                        verts = verts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
+
+                        sampled_points_world = sampled_points @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
+
+                        object_flows.append(sampled_points_world)
 
                 except InvalidActionError as e:
                     print(f"Invalid action: {e} \n Cancel this trial")
