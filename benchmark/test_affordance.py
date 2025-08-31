@@ -422,9 +422,14 @@ def main(args, sim_cfg):
 
             # save object flows after task ends
             object_flows = np.stack(object_flows).transpose(1, 0, 2) # to N, T, 3
+            T_cam_world = np.linalg.inv(T_world_cam)
+            object_flows_in_cam = object_flows @ T_cam_world[:3, :3].T + T_cam_world[:3, 3]
             flow_dict = {
                 "result": result,
+                "T_world_cam": T_world_cam,
+                "T_c2o": T_c2o, # NAF frame to camera frame
                 "object_flows": object_flows,
+                "object_flows_in_cam": object_flows_in_cam,
             }
             object_flows_save_fn = os.path.join(SAVE_ROOT, camera, f'trial_{i}', 'object_flows.npz')
             np.savez(object_flows_save_fn, **flow_dict)
