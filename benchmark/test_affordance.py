@@ -39,9 +39,15 @@ from benchmark.sim_utils import (
             convert_camera_name, draw_trajectory, interpolate_trajectory,
             get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position,
             adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl,
-            get_pcd_with_color, get_clean_point_cloud, downsample_pcd, pick_points_in_viewer
+            get_pcd_with_color, select_and_sample_surfce_pts
 )
 
+# TODO: fix this 
+OBJECTNAMES = {
+    'open_microwave': ['microwave_door_resp'],
+    'open_cabinet':['cabinet_door_handle'],
+    'open_drawer':['drawer_bottom'],
+    }
 
 # TODO: smoothen the flow (optional) and then traininig
 # TODO: test the resulted flows, is it better than orginal ones?
@@ -252,6 +258,7 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, th=0.08, vis=F
         o3d.io.write_triangle_mesh(traj_save_fn.replace('.ply', '_smoothed.ply'), mesh)
     return actions
 
+
 def main(args, sim_cfg):
     DEBUG_VIS = args.DEBUG_VIS
     task_name = args.task_name 
@@ -392,42 +399,29 @@ def main(args, sim_cfg):
                 actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, smooth=False, vis=DEBUG_VIS)
 
 
+            # get flow init pts in object frame
             object_flows = []
-            mask_object_names = ['microwave_door_resp']
+            mask_object_names = OBJECTNAMES[args.task_name]
+            breakpoint()
+            for obj_name in mask_object_names:
+                from pyrep.objects.shape import Shape
+                obj = Shape.get_object(obj_name)
+                verts, faces, normals = obj.get_mesh_data() # in own frame
+                sampled_pts = select_and_sample_surfce_pts(verts=verts, num_points=400)
+
             episode_length = len(actions)+10
             trajectory_idx = 0
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 try:
                     obs, reward, terminate = task.step(action)
-                    # sample points from shape in mask_object_names
-                    for obj_name in mask_object_names:
-                        # from pyrep.objects.object import Object
-                        from pyrep.objects.shape import Shape
-                        obj = Shape.get_object(obj_name)
-                        verts, faces, normals = obj.get_mesh_data() # in own frame
 
-                        #! TEMP Hardcoded, selecting the surface that we want to sample from
-                        # sample a grid of points on the surface
-                        sampled_points = []
-                        x_coordinates =  0.00839232
-                        y_range = [-0.10809416, 0.13200484]
-                        z_range = [-0.22315015, 0.22799721]
-                        y_coordinates = np.linspace(y_range[0], y_range[1], 20)
-                        z_coordinates = np.linspace(z_range[0], z_range[1], 20)
-                        for y in y_coordinates:
-                            for z in z_coordinates:
-                                x_coordinates = x_coordinates
-                                sampled_points.append(np.array([x_coordinates, y, z]))
-                        sampled_points = np.array(sampled_points)
-                        #! END TEMP HARDCODED
-                        
-                        # convert to world frame
+                    # convert to world frame
+                    for obj_name in mask_object_names:
+                        obj = Shape.get_object(obj_name)
                         T_world_obj = obj.get_matrix()
                         verts = verts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
-
-                        sampled_points_world = sampled_points @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
-
+                        sampled_points_world = sampled_pts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
                         object_flows.append(sampled_points_world)
 
                 except InvalidActionError as e:

@@ -1154,9 +1154,49 @@ def change_robot_renderability(robot_names=['Panda'], task=None):
     
     return visual_objects, restore_robot
 
+def pick_points_in_viewer(points, scene_colors=None, verbose=False) -> np.ndarray:
+    def pick_points(pcd):
+        print("")
+        print(
+            "1) Please pick at least three correspondences using [shift + left click]"
+        )
+        print("   Press [shift + right click] to undo point picking")
+        print("2) After picking points, press 'Q' to close the window")
+        vis = o3d.visualization.VisualizerWithEditing()
+        vis.create_window()
+        vis.add_geometry(pcd)
+        vis.run()  # user picks points
+        vis.destroy_window()
+        print("")
+        return vis.get_picked_points()
+
+    if isinstance(points, np.ndarray):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        if scene_colors is not None:
+            pcd.colors = o3d.utility.Vector3dVector(scene_colors)
+    elif isinstance(points, o3d.cuda.pybind.geometry.TriangleMesh):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = points.vertices
+        pcd.colors = points.vertex_colors
+    else:
+        pcd = points
+
+    picked_ids = pick_points(pcd)
+    final_points = np.asarray(pcd.points)[picked_ids]
+    print("Points selected: ", final_points.shape, final_points)
+
+    if verbose:
+        print("Final points: ")
+        for i in range(len(final_points)):
+            print(final_points[i])
+    return final_points
+
+
 def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_overhead', task=None, mask_object_names=None):
     """
     Get clean point cloud without robot occlusion by temporarily hiding the robot.
+    example usage: points_cloud_without_robot = get_clean_point_cloud(robot_names=['Panda'], obs=obs, camera_name=camera, task=task, mask_object_names=mask_object_names) 
     
     Args:
         robot_names: List of robot object names to hide
@@ -1214,3 +1254,218 @@ def get_clean_point_cloud(robot_names=['Panda'], obs=None, camera_name='cam_over
     finally:
         # Always restore robot visibility
         restore_robot()
+
+
+def fit_surface(points: np.ndarray, method: str = 'plane') -> dict:
+    """
+    Fit a 3D surface to the given points.
+    
+    Args:
+        points: Nx3 array of 3D points
+        method: 'plane' for plane fitting, 'polynomial' for polynomial surface fitting
+    
+    Returns:
+        Dictionary containing surface parameters
+    """
+    if method == 'plane':
+        # Use SVD to fit a plane robustly (better for nearly vertical planes)
+        # Center the points
+        centroid = np.mean(points, axis=0)
+        centered_points = points - centroid
+        
+        # Compute SVD
+        U, S, Vt = np.linalg.svd(centered_points)
+        
+        # The normal vector is the last column of V (corresponding to smallest singular value)
+        normal = Vt[-1]
+        
+        # Ensure normal points in the right direction (towards positive z if possible)
+        if normal[2] < 0:
+            normal = -normal
+        
+        # Get plane equation: ax + by + cz + d = 0
+        # where (a,b,c) is the normal vector and d = -(ax0 + by0 + cz0)
+        a, b, c = normal
+        d = -np.dot(normal, centroid)
+        
+        # For nearly vertical planes, we need to handle the case where c is very small
+        # If the plane is nearly vertical (c close to 0), we'll use a different parameterization
+        if abs(c) < 1e-6:  # Nearly vertical plane
+            # Use x = ay + bz + c parameterization
+            if abs(b) > abs(a):
+                # Plane is more like x = bz + c
+                ransac = RANSACRegressor(residual_threshold=0.01, max_trials=1000, random_state=42)
+                ransac.fit(points[:, [1, 2]], points[:, 0])  # Fit x = f(y,z)
+                coef_y, coef_z = ransac.estimator_.coef_
+                intercept = ransac.estimator_.intercept_
+                inlier_mask = ransac.inlier_mask_
+                param_type = 'x_plane'
+                coefficients = [coef_y, coef_z, intercept]
+            else:
+                # Plane is more like x = ay + c
+                ransac = RANSACRegressor(residual_threshold=0.01, max_trials=1000, random_state=42)
+                ransac.fit(points[:, 1:2], points[:, 0])  # Fit x = f(y)
+                coef_y = ransac.estimator_.coef_[0]
+                intercept = ransac.estimator_.intercept_
+                inlier_mask = ransac.inlier_mask_
+                param_type = 'x_plane_simple'
+                coefficients = [coef_y, intercept]
+        else:
+            # Standard z = ax + by + c parameterization
+            ransac = RANSACRegressor(residual_threshold=0.01, max_trials=1000, random_state=42)
+            ransac.fit(points[:, :2], points[:, 2])  # Fit z = f(x,y)
+            a, b = ransac.estimator_.coef_
+            c = ransac.estimator_.intercept_
+            inlier_mask = ransac.inlier_mask_
+            param_type = 'z_plane'
+            coefficients = [a, b, c]
+        
+        # Get a point on the plane (use centroid of inliers)
+        plane_point = np.mean(points[inlier_mask], axis=0)
+        
+        return {
+            'type': 'plane',
+            'normal': normal,
+            'point': plane_point,
+            'coefficients': coefficients,
+            'param_type': param_type,
+            'inlier_mask': inlier_mask
+        }
+    
+    elif method == 'polynomial':
+        # Fit a polynomial surface (quadratic)
+        poly_features = PolynomialFeatures(degree=2, include_bias=False)
+        poly_model = Pipeline([
+            ('poly', poly_features),
+            ('linear', RANSACRegressor(residual_threshold=0.01, max_trials=1000))
+        ])
+        
+        # Fit z = f(x, y) where f is a quadratic function
+        poly_model.fit(points[:, :2], points[:, 2])
+        
+        return {
+            'type': 'polynomial',
+            'model': poly_model,
+            'degree': 2
+        }
+    
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+def sample_surface(surface_params: dict, bounding_box: List[np.ndarray], num_points: int) -> np.ndarray:
+    """
+    Sample points from the fitted surface within the bounding box.
+    
+    Args:
+        surface_params: Dictionary returned by fit_surface
+        bounding_box: [min_point, max_point] defining the sampling region
+        num_points: Number of points to sample
+    
+    Returns:
+        Nx3 array of sampled points on the surface
+    """
+    min_point, max_point = bounding_box
+    
+    if surface_params['type'] == 'plane':
+        # For plane, we can sample uniformly in 2D and project to 3D
+        normal = surface_params['normal']
+        plane_point = surface_params['point']
+        param_type = surface_params['param_type']
+        coefficients = surface_params['coefficients']
+        
+        if param_type == 'z_plane':
+            # Standard case: z = ax + by + c
+            a, b, c = coefficients
+            
+            # Create a 2D grid in the bounding box
+            x_range = np.linspace(min_point[0], max_point[0], int(np.sqrt(num_points)))
+            y_range = np.linspace(min_point[1], max_point[1], int(np.sqrt(num_points)))
+            
+            X, Y = np.meshgrid(x_range, y_range)
+            X = X.flatten()
+            Y = Y.flatten()
+            
+            # Calculate Z using plane equation: z = ax + by + c
+            Z = a * X + b * Y + c
+            
+            # Stack into 3D points
+            sampled_points = np.column_stack([X, Y, Z])
+            
+        elif param_type == 'x_plane':
+            # Nearly vertical plane: x = ay + bz + c
+            a, b, c = coefficients
+            
+            # Create a 2D grid in y-z plane
+            y_range = np.linspace(min_point[1], max_point[1], int(np.sqrt(num_points)))
+            z_range = np.linspace(min_point[2], max_point[2], int(np.sqrt(num_points)))
+            
+            Y, Z = np.meshgrid(y_range, z_range)
+            Y = Y.flatten()
+            Z = Z.flatten()
+            
+            # Calculate X using plane equation: x = ay + bz + c
+            X = a * Y + b * Z + c
+            
+            # Stack into 3D points
+            sampled_points = np.column_stack([X, Y, Z])
+            
+        elif param_type == 'x_plane_simple':
+            # Nearly vertical plane: x = ay + c
+            a, c = coefficients
+            
+            # Create a 2D grid in y-z plane
+            y_range = np.linspace(min_point[1], max_point[1], int(np.sqrt(num_points)))
+            z_range = np.linspace(min_point[2], max_point[2], int(np.sqrt(num_points)))
+            
+            Y, Z = np.meshgrid(y_range, z_range)
+            Y = Y.flatten()
+            Z = Z.flatten()
+            
+            # Calculate X using plane equation: x = ay + c
+            X = a * Y + c
+            
+            # Stack into 3D points
+            sampled_points = np.column_stack([X, Y, Z])
+        
+        # If we have more points than requested, randomly sample
+        if len(sampled_points) > num_points:
+            indices = np.random.choice(len(sampled_points), num_points, replace=False)
+            sampled_points = sampled_points[indices]
+        
+        return sampled_points
+    
+    elif surface_params['type'] == 'polynomial':
+        # For polynomial surface, sample in 2D and evaluate the polynomial
+        model = surface_params['model']
+        
+        # Create a 2D grid
+        x_range = np.linspace(min_point[0], max_point[0], int(np.sqrt(num_points)))
+        y_range = np.linspace(min_point[1], max_point[1], int(np.sqrt(num_points)))
+        
+        X, Y = np.meshgrid(x_range, y_range)
+        X = X.flatten()
+        Y = Y.flatten()
+        
+        # Predict Z using the polynomial model
+        Z = model.predict(np.column_stack([X, Y]))
+        
+        # Stack into 3D points
+        sampled_points = np.column_stack([X, Y, Z])
+        
+        # If we have more points than requested, randomly sample
+        if len(sampled_points) > num_points:
+            indices = np.random.choice(len(sampled_points), num_points, replace=False)
+            sampled_points = sampled_points[indices]
+        
+        return sampled_points
+    
+    else:
+        raise ValueError(f"Unknown surface type: {surface_params['type']}")
+
+
+def select_and_sample_surfce_pts(verts,  num_points=400):
+    selected_pts = pick_points_in_viewer(verts)
+    bounding_box = [selected_pts.min(axis=0), selected_pts.max(axis=0)]
+    sampling_surface = fit_surface(selected_pts)
+    sampled_pts = sample_surface(sampling_surface, bounding_box, num_points)
+    return sampled_pts
