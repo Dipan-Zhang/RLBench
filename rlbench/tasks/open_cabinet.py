@@ -13,8 +13,6 @@ class OpenCabinet(Task):
         self.cabinet.set_position([0.65,0,1.275])
         self.left_joint = Joint('cabinet_door_hinge_left')
 
-
-
     def init_episode(self, index: int) -> List[str]:
         self.register_success_conditions(
             [JointCondition(self.left_joint, np.deg2rad(30)),])
