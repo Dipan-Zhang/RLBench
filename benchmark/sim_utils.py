@@ -41,6 +41,10 @@ from pyrep.objects.vision_sensor import VisionSensor
 # figure out how to parse target name??
 CAMERA_POSES = {
     "PickUpBottle":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
         'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
@@ -55,6 +59,10 @@ CAMERA_POSES = {
         },
     },
     "PickUpCup":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
         'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
@@ -69,6 +77,10 @@ CAMERA_POSES = {
         },
         },
     "PickUpMug":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
         'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
@@ -83,6 +95,10 @@ CAMERA_POSES = {
         },
         },
     "PickUpBowl":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
         'cam_front':{
         'pos': [1.35, 0, 1.13],
         'ori': [-180, -75, 90],
@@ -703,6 +719,24 @@ def visualize_pointcloud(demo_pcd, target_pcd, T_o1c1, T_c2o1):
     target_pcd_vis.transform(T_o1c2)
 
     o3d.visualization.draw_geometries([target_pcd_vis, demo_pcd_vis, c1_axis, c2_axis, world_axis]) 
+
+def downsample_pcd(pcd, n_target=1500):
+    # Downsample adaptively to get exactly 1500 points
+    n_target = 1500
+    voxel_size = 0.01
+    object_pcd_downsampled = pcd.voxel_down_sample(voxel_size=voxel_size)
+    
+    # Randomly sample remaining points if needed
+    points = np.asarray(object_pcd_downsampled.points)
+    if len(points) > n_target:
+        indices = np.random.choice(len(points), n_target, replace=False)
+        points = points[indices]
+    elif len(points) < n_target:
+        # Repeat points if we have too few
+        indices = np.random.choice(len(points), n_target - len(points))
+        points = np.concatenate([points, points[indices]])
+    downsampled_pcd = visualize_points(points)
+    return downsampled_pcd
 
 def visualize_affordance_with_scene(target_pcd, affordance_c2, corres_3d_c2):
     "visualize transferred affordance in target frame, scale = render scale or real scale"
