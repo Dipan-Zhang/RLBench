@@ -17,6 +17,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_var', type=int, default=0, help='use variation')
     parser.add_argument('--save_video', action='store_true', help='save video')
     parser.add_argument('--dry', action='store_true', help='dry run, do not save results')
+    parser.add_argument('--save_flow', action='store_true', help='save flow')
 
     args = parser.parse_args()
 
@@ -42,7 +43,8 @@ if __name__ == "__main__":
         TASKS = ['open_drawer', 'close_microwave', 'open_slide_cabinet', 'close_slide_cabinet', 'close_cabinet']
     elif args.task == 'ablation_multiple_goal_rest':
         TASKS = ['open_drawer', 'open_dishwasher', 'down_toilet_seat', 'close_slide_cabinet', 'open_slide_cabinet']
-
+    elif args.task == 'finetune':
+        TASKS = ['open_drawer', 'open_cabinet']
     elif args.task =='ablation_2D':
         TASKS = ABLATION_2D_TASK_LIST
     elif args.task == 'ablation_2D_rest':
@@ -70,6 +72,8 @@ if __name__ == "__main__":
                 cmd += " --save_video"
             if args.dry:
                 cmd += " --no_save_result"
+            if args.save_flow:
+                cmd += " --save_flow"
             os.system(cmd)
         else:
             for var in range(args.num_var):
@@ -79,6 +83,8 @@ if __name__ == "__main__":
                     cmd += " --headless"
                 if args.DEBUG_VIS:
                     cmd += " --DEBUG_VIS"
+                if args.save_flow:
+                    cmd += " --save_flow"
                 os.system(cmd)
 
         print("=======================================================")

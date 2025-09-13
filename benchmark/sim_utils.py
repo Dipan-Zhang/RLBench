@@ -37,6 +37,9 @@ import copy
 import transforms3d as t3d
 from pyrep.objects.vision_sensor import VisionSensor
 from pyrep.objects import Object
+from sklearn.linear_model import RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline
 
 
 # figure out how to parse target name??

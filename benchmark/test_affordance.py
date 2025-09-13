@@ -45,7 +45,7 @@ from benchmark.sim_utils import (
 # TODO: fix this 
 OBJECTNAMES = {
     'open_microwave': ['microwave_door_resp'],
-    'open_cabinet':['cabinet_door_handle'],
+    'open_cabinet':['cabinet_door_handle_resp'],
     'open_drawer':['drawer_bottom'],
     }
 
@@ -331,6 +331,17 @@ def main(args, sim_cfg):
     exp_results_all = {}
     for camera in camera_names:
         result_list = []
+
+
+        # get flow init pts in object frame
+        mask_object_names = OBJECTNAMES[args.task_name]
+        if args.save_flow:
+            for obj_name in mask_object_names:
+                from pyrep.objects.shape import Shape
+                obj = Shape.get_object(obj_name)
+                verts, faces, normals = obj.get_mesh_data() # in own frame
+                sampled_pts = select_and_sample_surfce_pts(verts=verts, num_points=400)
+
         for i in range(num_trial):
             print(f'Camera {camera}, Episode {i}')
             if args.save_video:
@@ -399,30 +410,22 @@ def main(args, sim_cfg):
                 actions = plan_gripper_trajectory(obs, traj_world, traj_save_fn, smooth=False, vis=DEBUG_VIS)
 
 
-            # get flow init pts in object frame
-            object_flows = []
-            mask_object_names = OBJECTNAMES[args.task_name]
-            breakpoint()
-            for obj_name in mask_object_names:
-                from pyrep.objects.shape import Shape
-                obj = Shape.get_object(obj_name)
-                verts, faces, normals = obj.get_mesh_data() # in own frame
-                sampled_pts = select_and_sample_surfce_pts(verts=verts, num_points=400)
-
             episode_length = len(actions)+10
             trajectory_idx = 0
+            # breakpoint()
+            object_flows = []
             for ii in range(episode_length):
                 action = act_sparse(obs, actions, trajectory_idx, distance_threshold=0.01)
                 try:
                     obs, reward, terminate = task.step(action)
-
-                    # convert to world frame
-                    for obj_name in mask_object_names:
-                        obj = Shape.get_object(obj_name)
-                        T_world_obj = obj.get_matrix()
-                        verts = verts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
-                        sampled_points_world = sampled_pts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
-                        object_flows.append(sampled_points_world)
+                    if args.save_flow:
+                        # convert to world frame
+                        for obj_name in mask_object_names:
+                            obj = Shape.get_object(obj_name)
+                            T_world_obj = obj.get_matrix()
+                            verts = verts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
+                            sampled_points_world = sampled_pts @ T_world_obj[:3, :3].T + T_world_obj[:3, 3]
+                            object_flows.append(sampled_points_world)
 
                 except InvalidActionError as e:
                     print(f"Invalid action: {e} \n Cancel this trial")
@@ -446,20 +449,21 @@ def main(args, sim_cfg):
                 print('Task Timeout....')
                 result = 0
 
-            # save object flows after task ends
-            object_flows = np.stack(object_flows).transpose(1, 0, 2) # to N, T, 3
-            T_cam_world = np.linalg.inv(T_world_cam)
-            object_flows_in_cam = object_flows @ T_cam_world[:3, :3].T + T_cam_world[:3, 3]
-            flow_dict = {
-                "result": result,
-                "T_world_cam": T_world_cam,
-                "T_c2o": T_c2o, # NAF frame to camera frame
-                "object_flows": object_flows,
-                "object_flows_in_cam": object_flows_in_cam,
-            }
-            object_flows_save_fn = os.path.join(SAVE_ROOT, camera, f'trial_{i}', 'object_flows.npz')
-            np.savez(object_flows_save_fn, **flow_dict)
-            
+            if args.save_flow:
+                # save object flows after task ends
+                object_flows = np.stack(object_flows).transpose(1, 0, 2) # to N, T, 3
+                T_cam_world = np.linalg.inv(T_world_cam)
+                object_flows_in_cam = object_flows @ T_cam_world[:3, :3].T + T_cam_world[:3, 3]
+                flow_dict = {
+                    "result": result,
+                    "T_world_cam": T_world_cam,
+                    "T_c2o": T_c2o, # NAF frame to camera frame
+                    "object_flows": object_flows,
+                    "object_flows_in_cam": object_flows_in_cam,
+                }
+                object_flows_save_fn = os.path.join(SAVE_ROOT, camera, f'trial_{i}', 'object_flows.npz')
+                np.savez(object_flows_save_fn, **flow_dict)
+                
             result_list.append(result)
 
             # compose video
@@ -520,11 +524,13 @@ if __name__ == '__main__':
     parser.add_argument('--save_obj_pc', action='store_true', help='whether to save object point cloud')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', action='store_true', help='whether to save images')
-    parser.add_argument('--scale', type=float, default=1.5, help='scale factor for trajectory')
+    parser.add_argument('--scale', type=float, default=1.3, help='scale factor for trajectory')
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
     parser.add_argument('--DEBUG_VIS', action='store_true')
     parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--save_flow', action='store_true', help='whether to save flow')
+
     args = parser.parse_args()
 
     sim_cfg_fp = args.sim_config_fp

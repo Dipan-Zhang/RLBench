@@ -4,17 +4,14 @@ import logging
 import numpy as np
 import hashlib
 import open3d as o3d
-import torch
 import cv2
 from addict import Dict
 import math
-import torchvision.transforms as T
 import json
 from scipy.interpolate import CubicHermiteSpline, PchipInterpolator, UnivariateSpline
 from scipy.ndimage import distance_transform_edt
 from sklearn.linear_model import RANSACRegressor, LinearRegression
 import matplotlib.pyplot as plt
-import torch.nn.functional as F
 import ipdb
 from benchmark.generate_masked_object import compute_cropping_params, crop_images, compute_cropped_intrinsics
 import pickle
