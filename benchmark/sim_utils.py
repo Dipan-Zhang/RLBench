@@ -603,47 +603,6 @@ def create_obs_config(camera_names: List[str],
     )
     return obs_config
 
-def vis_pose(pos, ori, size=0.05):
-    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=size, origin=[0,0,0])
-    T_w_obj = np.eye(4)
-    T_w_obj[:3, :3] = ori
-    T_w_obj[:3, 3] = pos
-    frame.transform(T_w_obj)
-    return frame
-
-def interpolate_trajectory(waypoints, distance_threshold=0.01, min_points=2):
-    """
-    Interpolates a trajectory based on distance threshold between consecutive waypoints.
-    
-    Args:
-        waypoints (np.ndarray): Array of waypoint positions.
-        distance_threshold (float): Maximum distance between consecutive points after interpolation.
-        min_points (int): Minimum number of points to interpolate between waypoints.
-        
-    Returns:
-        np.ndarray: Array of interpolated waypoints.
-    """
-    if len(waypoints) < 2:
-        return np.array(waypoints)
-    
-    interpolated = []
-    for i in range(len(waypoints) - 1):
-        start = waypoints[i]
-        end = waypoints[i + 1]
-        
-        # Calculate the distance between consecutive waypoints
-        distance = np.linalg.norm(end - start)
-        
-        # Calculate how many points we need based on the distance threshold
-        num_points = max(min_points, int(np.ceil(distance / distance_threshold)))
-        
-        # Generate the interpolated points
-        for t in np.linspace(0, 1, num_points):
-            interpolated.append((1 - t) * start + t * end)
-    
-    return np.array(interpolated)
-
-
 def draw_trajectory(trajectory, ambient_diffuse=[1, 0, 1], maxItemCount=9999):
     """
     Draws a debug line through a sequence of 3D waypoints using PyRep's drawing functions.
@@ -679,8 +638,6 @@ def draw_trajectory(trajectory, ambient_diffuse=[1, 0, 1], maxItemCount=9999):
         sim.simAddDrawingObjectItem(line_handle, segment)
         prev_point = point
     return line_handle
-
-
 
 def visualize_affordance_in_mesh(mesh, T_o1c1, T_c2o1, affordance, scale):
     "use neus scale in this function, only for same object"
@@ -739,27 +696,6 @@ def visualize_pointcloud(demo_pcd, target_pcd, T_o1c1, T_c2o1):
 
     o3d.visualization.draw_geometries([target_pcd_vis, demo_pcd_vis, c1_axis, c2_axis, world_axis]) 
 
-def transform_motion_plan(motion_plan, T_cam_obj):
-    """
-    Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
-
-    Each (R, t) in motion_plan is a relative transform in the object frame.
-    """
-    T_obj_cam = np.linalg.inv(T_cam_obj)  # Needed for change of basis
-    motion_plan_cam = []
-
-    for R_obj, t_obj, success in motion_plan:
-        T_rel_obj = np.eye(4)
-        T_rel_obj[:3, :3] = R_obj
-        T_rel_obj[:3, 3] = t_obj
-
-        T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
-
-        R_cam = T_rel_cam[:3, :3]
-        t_cam = T_rel_cam[:3, 3]
-        motion_plan_cam.append((R_cam, t_cam, success))
-
-    return motion_plan_cam
     
 def downsample_pcd(pcd, n_target=1500):
     # Downsample adaptively to get exactly 1500 points

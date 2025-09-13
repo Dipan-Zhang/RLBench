@@ -32,67 +32,21 @@ from benchmark.helpers import (
                         underscore_string_to_camel_case,
                         scale_abs_trajectory,
                         smooth_trajectory,
-                        smooth_pose_sequence
+                        transform_motion_plan,
+                        plan_gripper_trajectory,
+                        generate_postgrasp_trajectory,
+                        vis_pose
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 
-from benchmark.sim_utils import create_obs_config, vis_pose, interpolate_trajectory,\
-          set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
-          transform_motion_plan 
+from benchmark.sim_utils import (
+                            create_obs_config, 
+                            set_camera_pose,
+                            CAMERA_POSES,
+                            CAMERA_POSES_HZ, 
+                            get_T_world_cam_gl
+                            )
 
-
-
-def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
-    # Generate a post-grasp trajectory
-    post_grasp_trajectory = []
-    for i in range(10):
-        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.03)
-
-        post_grasp_trajectory.append(t)
-    return np.array(post_grasp_trajectory)
-
-def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, smooth=False, vis=False):
-    "plan smooth gripper trajectory based on affordance trajectory"
-    current_gripper_pose = obs.gripper_pose[:7]
-    offset = affordance_traj_world[0] - current_gripper_pose[:3]
-    affordance_traj_world -= offset
-    affordance_traj_world = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world], axis=0)
-    
-    # smoothen the trajectory
-    if smooth:
-        affordance_traj_world = interpolate_trajectory(affordance_traj_world, distance_threshold=0.01)
-        
-    post_gripper_ori = current_gripper_pose[3:7]
-    post_gripper_poses = np.concatenate((
-        affordance_traj_world, 
-        np.repeat(post_gripper_ori.reshape(-1, 4), affordance_traj_world.shape[0], axis=0)), axis=1)
-    post_gripper_poses = np.concatenate([post_gripper_poses, np.zeros((affordance_traj_world.shape[0], 1))], axis=1)
-    
-    # add noise to avoid devide by zero
-    noise = np.random.normal(0, 1e-4, post_gripper_poses.shape)
-    post_gripper_poses[:, :3] += noise[:, :3]
-    actions = post_gripper_poses
-
-    # world frame pcd
-    current_pts = obs.left_shoulder_point_cloud
-    current_pcd = visualize_points(current_pts.reshape(-1, 3))
-
-    action_vis = []
-    for i in range(len(actions)):
-        action_vis.append(vis_pose(actions[i][:3], Rot.from_quat(actions[i][3:7]).as_matrix()))
-    world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
-    plan_trajectory = visualize_3d_trajectory(affordance_traj_world, size=0.02, cmap_name="plasma", invert=False)
-    
-    if vis:
-        o3d.visualization.draw_geometries(action_vis + plan_trajectory + [current_pcd ,world])
-    else: 
-        mesh = o3d.geometry.TriangleMesh()
-        for wp_vis in plan_trajectory+action_vis:
-            mesh += wp_vis
-        o3d.io.write_triangle_mesh(save_fn, mesh)
-        point_cloud_save_fn = save_fn.replace('.ply', '_pcd.ply')
-        o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
-    return actions
 
 
 def act_sparse(obs, actions, trajectory_idx, distance_threshold=0.05):

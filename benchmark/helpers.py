@@ -65,6 +65,29 @@ def apply_motion_plan(pose_init, motion_plan):
         current_pose = new_pose
     return poses
 
+def transform_motion_plan(motion_plan, T_cam_obj):
+    """
+    Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
+
+    Each (R, t) in motion_plan is a relative transform in the object frame.
+    """
+    T_obj_cam = np.linalg.inv(T_cam_obj)  # Needed for change of basis
+    motion_plan_cam = []
+
+    for R_obj, t_obj, success in motion_plan:
+        T_rel_obj = np.eye(4)
+        T_rel_obj[:3, :3] = R_obj
+        T_rel_obj[:3, 3] = t_obj
+
+        T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
+
+        R_cam = T_rel_cam[:3, :3]
+        t_cam = T_rel_cam[:3, 3]
+        motion_plan_cam.append((R_cam, t_cam, success))
+
+    return motion_plan_cam
+
+
 def scale_abs_trajectory(traj, scale, reciprocal=False):
     "scale trajectory poses traj: [H, 4, 4]"
     if reciprocal:
@@ -160,30 +183,6 @@ def ransac_filter(fill_indices, traj, residual_threshold=0.08, min_samples=0.5):
     return ransac.inlier_mask_
 
 
-def interpolate_trajectory(fill_indices, traj, NUM_POINTS=120):
-    ""
-    try:
-        full_traj_x, curve_x = spline_interpolation(fill_indices, traj[:, 0], NUM_POINTS)
-        full_traj_y, curve_y = spline_interpolation(fill_indices, traj[:, 1], NUM_POINTS)
-
-        traj_z = traj[:, 2]
-        inlier_mask = ransac_filter(fill_indices, traj_z)
-        # If RANSAC filtering leaves too few points, fallback to the original data.
-        if np.sum(inlier_mask) < 3:
-            filtered_fill_indices = np.array(fill_indices)
-            filtered_z = traj_z
-        else:
-            filtered_fill_indices = np.array(fill_indices)[inlier_mask]
-            filtered_z = traj_z[inlier_mask]
-        full_traj_z, curve_z = spline_interpolation(filtered_fill_indices, filtered_z, NUM_POINTS)
-        full_traj = np.stack([full_traj_x, full_traj_y, full_traj_z], axis=1)
-
-        curve = (curve_x, curve_y, curve_z)
-        return full_traj, curve
-    except Exception as e:
-        # logger.error(f"Error in interpolate_trajectory: {e}")
-        raise
-
 def get_heatmap(values, cmap_name="turbo", invert=False):
     try:
         if invert:
@@ -195,6 +194,103 @@ def get_heatmap(values, cmap_name="turbo", invert=False):
     except Exception as e:
         # logger.error(f"Error in get_heatmap: {e}")
         raise
+
+
+def interpolate_trajectory(waypoints, distance_threshold=0.01, min_points=2):
+    """
+    Interpolates a trajectory based on distance threshold between consecutive waypoints.
+    
+    Args:
+        waypoints (np.ndarray): Array of waypoint positions.
+        distance_threshold (float): Maximum distance between consecutive points after interpolation.
+        min_points (int): Minimum number of points to interpolate between waypoints.
+        
+    Returns:
+        np.ndarray: Array of interpolated waypoints.
+    """
+    if len(waypoints) < 2:
+        return np.array(waypoints)
+    
+    interpolated = []
+    for i in range(len(waypoints) - 1):
+        start = waypoints[i]
+        end = waypoints[i + 1]
+        
+        # Calculate the distance between consecutive waypoints
+        distance = np.linalg.norm(end - start)
+        
+        # Calculate how many points we need based on the distance threshold
+        num_points = max(min_points, int(np.ceil(distance / distance_threshold)))
+        
+        # Generate the interpolated points
+        for t in np.linspace(0, 1, num_points):
+            interpolated.append((1 - t) * start + t * end)
+    
+    return np.array(interpolated)
+
+
+def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
+    # Generate a post-grasp trajectory
+    post_grasp_trajectory = []
+    for i in range(10):
+        t = grasp_T[:3, 3] + (post_grasp_dir * (i + 1) * 0.03)
+
+        post_grasp_trajectory.append(t)
+    return np.array(post_grasp_trajectory)
+
+
+def vis_pose(pos, ori, size=0.05):
+    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=size, origin=[0,0,0])
+    T_w_obj = np.eye(4)
+    T_w_obj[:3, :3] = ori
+    T_w_obj[:3, 3] = pos
+    frame.transform(T_w_obj)
+    return frame
+
+
+def plan_gripper_trajectory(obs, affordance_traj_world, save_fn, smooth=False, vis=False):
+    "plan smooth gripper trajectory based on affordance trajectory"
+    current_gripper_pose = obs.gripper_pose[:7]
+    offset = affordance_traj_world[0] - current_gripper_pose[:3]
+    affordance_traj_world -= offset
+    affordance_traj_world = np.concatenate([affordance_traj_world[0].reshape(-1,3), affordance_traj_world], axis=0)
+    
+    # smoothen the trajectory
+    if smooth:
+        affordance_traj_world = interpolate_trajectory(affordance_traj_world, distance_threshold=0.01)
+        
+    post_gripper_ori = current_gripper_pose[3:7]
+    post_gripper_poses = np.concatenate((
+        affordance_traj_world, 
+        np.repeat(post_gripper_ori.reshape(-1, 4), affordance_traj_world.shape[0], axis=0)), axis=1)
+    post_gripper_poses = np.concatenate([post_gripper_poses, np.zeros((affordance_traj_world.shape[0], 1))], axis=1)
+    
+    # add noise to avoid devide by zero
+    noise = np.random.normal(0, 1e-4, post_gripper_poses.shape)
+    post_gripper_poses[:, :3] += noise[:, :3]
+    actions = post_gripper_poses
+
+    # world frame pcd
+    current_pts = obs.left_shoulder_point_cloud
+    current_pcd = visualize_points(current_pts.reshape(-1, 3))
+
+    action_vis = []
+    for i in range(len(actions)):
+        action_vis.append(vis_pose(actions[i][:3], Rot.from_quat(actions[i][3:7]).as_matrix()))
+    world = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0,0,0])
+    plan_trajectory = visualize_3d_trajectory(affordance_traj_world, size=0.02, cmap_name="plasma", invert=False)
+    
+    if vis:
+        o3d.visualization.draw_geometries(action_vis + plan_trajectory + [current_pcd ,world])
+    else: 
+        mesh = o3d.geometry.TriangleMesh()
+        for wp_vis in plan_trajectory+action_vis:
+            mesh += wp_vis
+        o3d.io.write_triangle_mesh(save_fn, mesh)
+        point_cloud_save_fn = save_fn.replace('.ply', '_pcd.ply')
+        o3d.io.write_point_cloud(point_cloud_save_fn, current_pcd)
+    return actions
+
 
 def visualize_sphere_o3d(center, color=[1, 0, 0], size=0.03):
     try:
