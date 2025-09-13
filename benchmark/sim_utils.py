@@ -40,6 +40,25 @@ from pyrep.objects.vision_sensor import VisionSensor
 
 # figure out how to parse target name??
 CAMERA_POSES = {
+    "PickUpCan":{
+        'cam_overhead':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_front':{
+        'pos': [1.35, 0, 1.13],
+        'ori': [-180, -75, 90],
+        },
+        'cam_over_shoulder_left':{
+            'pos': [1.35, -0.3, 1.13],
+            'ori': [-110, -70, 160]
+        },
+        'cam_over_shoulder_right':{
+            'pos': [1.35, 0.3, 1.13],
+            'ori': [135, -75, 45]
+        },
+    },
+
     "PickUpBottle":{
         'cam_overhead':{
         'pos': [1.35, 0, 1.13],
