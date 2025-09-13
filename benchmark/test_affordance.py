@@ -15,7 +15,9 @@ from rlbench.action_modes.arm_action_modes import EndEffectorPoseViaPlanning, En
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.backend.exceptions import InvalidActionError
-from tools.cinematic_recorder import CircleCameraMotion, TaskRecorder, FixedCameraMotion
+from tools.cinematic_recorder import CircleCameraMotion, TaskRecorder
+
+# for task recorder
 from pyrep.objects import Dummy
 from pyrep.objects.vision_sensor import VisionSensor
 
@@ -34,34 +36,11 @@ from benchmark.helpers import (
                         )
 # from thirdparty.graspNet.gsnet_wrapper import GSNetWrapper
 
-from benchmark.sim_utils import create_obs_config, vis_pose, compute_gripper_poses,\
-      convert_camera_name, draw_trajectory, interpolate_trajectory,\
-          get_robot_pose, pose_to_matrix, hide_robot_temporarily, restore_robot_position, \
-          adjust_camera_pose, set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
-          get_pcd_with_color
+from benchmark.sim_utils import create_obs_config, vis_pose, interpolate_trajectory,\
+          set_camera_pose, CAMERA_POSES, CAMERA_POSES_HZ, get_T_world_cam_gl, \
+          transform_motion_plan 
 
 
-def transform_motion_plan(motion_plan, T_cam_obj):
-    """
-    Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
-
-    Each (R, t) in motion_plan is a relative transform in the object frame.
-    """
-    T_obj_cam = np.linalg.inv(T_cam_obj)  # Needed for change of basis
-    motion_plan_cam = []
-
-    for R_obj, t_obj, success in motion_plan:
-        T_rel_obj = np.eye(4)
-        T_rel_obj[:3, :3] = R_obj
-        T_rel_obj[:3, 3] = t_obj
-
-        T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
-
-        R_cam = T_rel_cam[:3, :3]
-        t_cam = T_rel_cam[:3, 3]
-        motion_plan_cam.append((R_cam, t_cam, success))
-
-    return motion_plan_cam
 
 def generate_postgrasp_trajectory(grasp_T, post_grasp_dir):
     # Generate a post-grasp trajectory
@@ -176,7 +155,7 @@ def plan_motion_plan(obs, motion_plan_world, traj_save_fn, scale, th=0.08, vis=F
         post_gripper_poses.append(np.concatenate([post_gripper_translation, post_gripper_rotation.as_quat()]))
     
     # After you have post_gripper_poses as a (N, 7) array:
-    post_gripper_poses = smooth_trajectory(post_gripper_poses, max_translation_step=0.008, max_rotation_deg=1.0)
+    post_gripper_poses = smooth_trajectory(post_gripper_poses, max_translation_step=0.005, max_rotation_deg=1.0)
     # post_gripper_poses = smooth_pose_sequence(post_gripper_poses, window_length=11, polyorder=3)
     
     # vis unsmooothed trajectory
@@ -280,8 +259,8 @@ def main(args, sim_cfg):
         cam.set_pose(cam_placeholder.get_pose())
         cam.set_parent(cam_placeholder)
         # cam_motion = FixedCameraMotion(cam, Dummy('cam_cinematic_base'), 0.005)
-        cam_motion = CircleCameraMotion(cam, Dummy('cam_cinematic_base'), 0.015)
-        tr = TaskRecorder(env, cam_motion, fps=30)
+        cam_motion = CircleCameraMotion(cam, Dummy('cam_cinematic_base'), 0.001)
+        tr = TaskRecorder(env, cam_motion, fps=40)
     
 
     mod = importlib.import_module("rlbench.tasks")
@@ -320,10 +299,9 @@ def main(args, sim_cfg):
         for i in range(num_trial):
             print(f'Camera {camera}, Episode {i}')
             if args.save_video:
-                image_save_dir = os.path.join(SAVE_ROOT, "exp_video/obs_{}/trial_{}".format(
-                    camera, i
-                ))
+                image_save_dir = os.path.join(SAVE_ROOT, "exp_video")
                 os.makedirs(image_save_dir, exist_ok=True)
+                video_save_fn = os.path.join(image_save_dir, f"obs_{camera}_trial_{i}.mp4")
 
             if method =='gflow' or method == 'vrb' or method == 'where2act' or method == 'vidbot':
                 PREDEFINED_CAM = CAMERA_POSES_HZ[taskName]
@@ -416,7 +394,7 @@ def main(args, sim_cfg):
 
             # compose video
             if args.save_video:
-                tr.save_single(os.path.join(image_save_dir, 'video.mp4'), fps=10)
+                tr.save_single(video_save_fn, fps=10)
         if not args.no_save_result:
             # Save the results
             save_fn = os.path.join(SAVE_ROOT, camera, 'exp_result.csv')

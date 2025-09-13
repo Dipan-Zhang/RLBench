@@ -739,6 +739,28 @@ def visualize_pointcloud(demo_pcd, target_pcd, T_o1c1, T_c2o1):
 
     o3d.visualization.draw_geometries([target_pcd_vis, demo_pcd_vis, c1_axis, c2_axis, world_axis]) 
 
+def transform_motion_plan(motion_plan, T_cam_obj):
+    """
+    Transforms a motion plan of relative transforms (R, t, success) from object frame to camera frame.
+
+    Each (R, t) in motion_plan is a relative transform in the object frame.
+    """
+    T_obj_cam = np.linalg.inv(T_cam_obj)  # Needed for change of basis
+    motion_plan_cam = []
+
+    for R_obj, t_obj, success in motion_plan:
+        T_rel_obj = np.eye(4)
+        T_rel_obj[:3, :3] = R_obj
+        T_rel_obj[:3, 3] = t_obj
+
+        T_rel_cam = T_cam_obj @ T_rel_obj @ T_obj_cam
+
+        R_cam = T_rel_cam[:3, :3]
+        t_cam = T_rel_cam[:3, 3]
+        motion_plan_cam.append((R_cam, t_cam, success))
+
+    return motion_plan_cam
+    
 def downsample_pcd(pcd, n_target=1500):
     # Downsample adaptively to get exactly 1500 points
     n_target = 1500
