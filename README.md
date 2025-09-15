@@ -89,6 +89,14 @@ pip install git+https://github.com/stepjam/RLBench.git
 
 And that's it!
 
+## Create new tasks
+- use task_builder to copy from a similar task
+- find a new mesh for visual (set it to not respondeable) ( import urdf/ dae mode from pr2 repo )
+- create a simple shape respondable object overlay with the visual part and keep it not detectable for camera
+- Using task builder for testing
+- register in rlbench/tasks/__init__.py 
+- Setup the camera configs and testing with own tasks
+
 ## Running Headless
 
 If you are running on a machine without display (i.e. Cloud VMs, compute clusters),
