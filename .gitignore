@@ -118,3 +118,12 @@ dmypy.json
 
 index.html
 outputs/
+urdfs/*
+benchmark_dataset/*
+rlbench_anran/
+rlbench_anran2/
+outputs_ablation*/
+
+outputs2/
+logs/
+outputs_*/

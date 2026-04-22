@@ -10,7 +10,7 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--task', type=str, default='all', help='task name')
     parser.add_argument('--method', type=str, default='ours', help='method name')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
-    parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
+    parser.add_argument('--trial_name', type=str, help='batch eval using same trial name')
     parser.add_argument('--save_dir', type=str, default='./outputs', help='directory of data saved by our method') 
     parser.add_argument('--headless', action='store_true', help='run in headless mode')
     parser.add_argument('--DEBUG_VIS', action='store_true', help='visualize the motion in rlbench')
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         print(f"====================Task: {task}=====================")
         taskName = underscore_string_to_camel_case(task)
         if args.num_var == 0:
-            trial_dir = os.path.join(SAVE_BASE_DIR, taskName, method, args.trial_dir)
+            trial_dir = os.path.join(SAVE_BASE_DIR, taskName, method, args.trial_name)
             cmd = f"python benchmark/test_affordance.py --task_name {task} --method {method} --trial_dir {trial_dir}"
             if args.headless:
                 cmd += " --headless"
@@ -73,7 +73,7 @@ if __name__ == "__main__":
             os.system(cmd)
         else:
             for var in range(args.num_var):
-                trial_dir = os.path.join(SAVE_BASE_DIR, taskName, method, args.trial_dir, f'var_{var}')
+                trial_dir = os.path.join(SAVE_BASE_DIR, taskName, method, args.trial_name, f'var_{var}')
                 cmd = f"python benchmark/test_affordance.py --task_name {task} --method {method} --trial_dir {trial_dir}"
                 if args.headless:
                     cmd += " --headless"

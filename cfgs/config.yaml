@@ -73,4 +73,5 @@ ABLATION_2D_TASK_LIST:
     'open_slide_cabinet',
     'close_laptop',
     'open_cabinet',
+    close_cabinet,
   ]
