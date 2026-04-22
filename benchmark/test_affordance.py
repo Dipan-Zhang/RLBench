@@ -271,7 +271,7 @@ def main(args, sim_cfg):
                 tr.take_snap(obs=obs)
 
             if method == 'ours':
-                motion_plan_c2 = motion_data[camera][i]['motion_plan']
+                motion_plan_c2 = motion_data[camera][i]['motion_plan_c2']
                 # convert the motion plan from c2 to world frame
                 T_world_cam = get_T_world_cam_gl(obs, camera)
                 motion_plan_world = transform_motion_plan(motion_plan_c2, T_world_cam)
@@ -403,7 +403,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_video', action='store_true', help='whether to save video')
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--no_save_result', action='store_true', help='whether to save images')
-    parser.add_argument('--scale', type=float, default=1.5, help='scale factor for trajectory')
+    parser.add_argument('--scale', type=float, default=1.0, help='scale factor for trajectory') # 1.4 for open microwave
     parser.add_argument('--trial_dir', type=str, help='directory to save results')
     parser.add_argument('--trial_save_dir', type=str, default='./outputs/', help='save directory')
     parser.add_argument('--DEBUG_VIS', action='store_true')
