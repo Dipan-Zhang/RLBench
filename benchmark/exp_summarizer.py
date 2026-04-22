@@ -279,23 +279,11 @@ def summarize_single(trial_dir):
     if args.dtm:
         print("Calculating DTM metrics...")
         dtm_data = calculate_dtm_metrics(trial_dir)
-    else:
-        # Try to load existing DTM data
-        dtm_path = os.path.join(trial_dir, 'evaluation_results', 'combined_metrics.pkl')
-        if os.path.exists(dtm_path):
-            combined_data = load_pickle(dtm_path)
-            dtm_data = {k: v.get('DTM', {}).get('values', []) for k, v in combined_data.items() 
-                      if k != 'all_cameras' and 'DTM' in v}
-            print("Loaded existing DTM data")
-        else:
-            print("Warning: No existing DTM data found and --skip-dtm specified")
     
     # Load success rates
-    print("Loading success rates...")
     success_data = load_success_rates(trial_dir)
     
     # Generate combined report
-    print("Generating combined report...")
     return combine_metrics_report(trial_dir, dtm_data, success_data)
 
 if __name__ == '__main__':
@@ -305,7 +293,7 @@ if __name__ == '__main__':
     parser.add_argument('--method', type=str, default='ours', help='method name' )
     parser.add_argument('--sim_config_fp', type=str, default='./cfgs/config.yaml', help='config file path')
     parser.add_argument('--data_dir', type=str, default='./outputs', help='data directory')
-    parser.add_argument('--trial_dir', type=str, help='batch eval using same trial directory')
+    parser.add_argument('--trial_name', type=str, help='batch eval using same trial directory')
     parser.add_argument('--dtm', action='store_true', help="Skip DTM calculation (use existing data)")
     args = parser.parse_args()
 
@@ -332,7 +320,7 @@ if __name__ == '__main__':
     for task in TASKS:
         print(f"====================Task: {task}=====================")
         taskName = underscore_string_to_camel_case(task)
-        trial_dir = os.path.join(DATA_DIR, taskName, method, args.trial_dir)
+        trial_dir = os.path.join(DATA_DIR, taskName, method, args.trial_name)
         task_SR_mean, task_DTM_mean = summarize_single(trial_dir)
 
         SR_mean = task_SR_mean*100 if task_SR_mean is not None else None
@@ -345,8 +333,26 @@ if __name__ == '__main__':
     # save the average success rate for all tasks
     benchmark_results_dir = os.path.join(DATA_DIR, 'benchmark_result')
     os.makedirs(benchmark_results_dir, exist_ok=True)
-    benchmark_results_fp = os.path.join(benchmark_results_dir, f'{method}_{args.trial_dir}.csv')
+    benchmark_results_fp = os.path.join(benchmark_results_dir, f'{method}_{args.trial_name}.csv')
     benchmark_results_df = pd.DataFrame(benchmark_results)
     benchmark_results_df.to_csv(benchmark_results_fp, index=False)
     print(f"All tasks average success rate saved to {benchmark_results_fp}")
+
+    # print a summary of mean success rate for each task
+    def print_simple_summary(benchmark_results):
+        for task, results in benchmark_results.items():
+            if results['SR_mean'] is not None:
+                print(f"Task: {task} success rate: {results['SR_mean']:.2f}%")
+            else:
+                print(f"Task: {task} success rate: N/A")
+    
+        # Calculate average success rate across all tasks
+        success_rates = [results['SR_mean'] for results in benchmark_results.values() if results['SR_mean'] is not None]
+        if success_rates:
+            avg_success_rate = np.mean(success_rates)
+            print(f"All tasks average success rate: {avg_success_rate:.2f}%")
+        else:
+            print("All tasks average success rate: N/A")
+
+    print_simple_summary(benchmark_results)
     print("Done")
