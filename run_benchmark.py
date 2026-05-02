@@ -3,6 +3,11 @@ import os
 from tqdm import tqdm
 import argparse
 from benchmark.helpers import underscore_string_to_camel_case
+from benchmark.exp_summarizer import (
+    print_simple_summary,
+    save_benchmark_results,
+    summarize_tasks,
+)
 from omegaconf import OmegaConf
 
 if __name__ == "__main__":
@@ -16,6 +21,8 @@ if __name__ == "__main__":
     parser.add_argument('--DEBUG_VIS', action='store_true', help='visualize the motion in rlbench')
     parser.add_argument('--num_var', type=int, default=0, help='use variation')
     parser.add_argument('--save_video', action='store_true', help='save video')
+    parser.add_argument('--no_summary', action='store_true', help='skip automatic summary')
+    parser.add_argument('--summary_dtm', action='store_true', help='calculate DTM during summary')
     parser.add_argument('--dry', action='store_true', help='dry run, do not save results')
 
     args = parser.parse_args()
@@ -82,3 +89,20 @@ if __name__ == "__main__":
                 os.system(cmd)
 
         print("=======================================================")
+
+    if args.no_summary:
+        print("Skipping automatic summary because --no_summary was provided.")
+    elif args.dry:
+        print("Skipping automatic summary because --dry does not save benchmark results.")
+    else:
+        print("====================Summarizing Results====================")
+        benchmark_results = summarize_tasks(
+            TASKS,
+            SAVE_BASE_DIR,
+            method,
+            args.trial_name,
+            dtm=args.summary_dtm,
+        )
+        save_benchmark_results(benchmark_results, SAVE_BASE_DIR, method, args.trial_name)
+        print_simple_summary(benchmark_results)
+        print("==========================================================")
